@@ -528,9 +528,8 @@ function applyAnalysisFilters() {
     const msVal = document.getElementById('analysis-ms-filter').value;
 
     analysisTable.setFilter(function(data) {
-        // Search filter
-        if (searchVal && !data.champion.toLowerCase().includes(searchVal) &&
-            !data.opponent.toLowerCase().includes(searchVal)) {
+        // Search filter - only match champion column (to see matchups from their perspective)
+        if (searchVal && !data.champion.toLowerCase().includes(searchVal)) {
             return false;
         }
 

@@ -11,7 +11,13 @@
       "Bash(python deep_analysis.py:*)",
       "Bash(python validate_formula.py:*)",
       "Bash(python:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(ping:*)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri ''http://localhost:8001/api/analysis'' -UseBasicParsing\\).Content\")",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate from SQLite to remote GitHub Pages feed\n\n- Add app/feed/ module for fetching remote JSON/GZIP data\n- Add app/queries/ module with feed-backed query implementations\n- Update app/main.py with lifespan management and 503 error handling\n- Add Procfile and runtime.txt for Railway deployment\n- Add httpx dependency for async HTTP client\n- Update CLAUDE.md with new architecture documentation\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)"
     ]
   }
 }

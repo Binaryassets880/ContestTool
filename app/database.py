@@ -511,26 +511,61 @@ def get_historical_analysis(limit: int = 1000) -> dict:
             my_class=row['t1_class']
         )
 
+        # Get team 2 champion's POINT-IN-TIME win rate
+        cursor.execute('''
+            SELECT ROUND(100.0 * SUM(CASE WHEN m.team_won = mp.team THEN 1 ELSE 0 END) / COUNT(*), 1) as win_pct
+            FROM matches m
+            JOIN match_players mp ON m.match_id = mp.match_id
+            WHERE mp.token_id = ? AND mp.is_champion = 1 AND m.state = 'scored' AND m.match_date < ?
+        ''', (row['t2_id'], match_date))
+        t2_wr_row = cursor.fetchone()
+        t2_wr = t2_wr_row['win_pct'] if t2_wr_row and t2_wr_row['win_pct'] else 50.0
+
+        # Get class matchup for team 2 vs team 1
+        cursor.execute('''
+            SELECT win_pct FROM class_matchups WHERE your_class = ? AND opp_class = ?
+        ''', (row['t2_class'], row['t1_class']))
+        t2_cm_row = cursor.fetchone()
+        t2_class_matchup = t2_cm_row['win_pct'] if t2_cm_row else 50.0
+
+        # Calculate matchup score for team 2
+        t2_score = calc_matchup_score(
+            t2_wr,
+            t2_class_matchup,
+            t2_supps['avg_elims'] or 1.0,
+            t2_supps['avg_deps'] or 1.5,
+            t1_supps['avg_elims'] or 1.0,
+            t1_supps['avg_deps'] or 1.5,
+            my_class=row['t2_class']
+        )
+
         t1_won = row['team_won'] == 1
+        t2_won = row['team_won'] == 2
 
-        # Track by bucket
-        if t1_score >= 80:
-            bucket = '80+'
-        elif t1_score >= 70:
-            bucket = '70-79'
-        elif t1_score >= 60:
-            bucket = '60-69'
-        elif t1_score >= 50:
-            bucket = '50-59'
-        elif t1_score >= 40:
-            bucket = '40-49'
-        else:
-            bucket = '<40'
+        # Round scores first (same rounding used for display)
+        t1_score_rounded = round(t1_score, 1)
+        t2_score_rounded = round(t2_score, 1)
 
-        ms_buckets[bucket]['total'] += 1
-        if t1_won:
-            ms_buckets[bucket]['wins'] += 1
+        # Helper to track bucket stats (uses rounded score to match filtering)
+        def add_to_bucket(score, won):
+            if score >= 80:
+                bucket = '80+'
+            elif score >= 70:
+                bucket = '70-79'
+            elif score >= 60:
+                bucket = '60-69'
+            elif score >= 50:
+                bucket = '50-59'
+            elif score >= 40:
+                bucket = '40-49'
+            else:
+                bucket = '<40'
+            ms_buckets[bucket]['total'] += 1
+            if won:
+                ms_buckets[bucket]['wins'] += 1
 
+        # Add team 1's perspective
+        add_to_bucket(t1_score_rounded, t1_won)
         games.append({
             'match_id': match_id,
             'date': row['match_date'],
@@ -540,6 +575,20 @@ def get_historical_analysis(limit: int = 1000) -> dict:
             'opponent_class': row['t2_class'],
             'matchup_score': round(t1_score, 1),
             'result': 'W' if t1_won else 'L',
+            'win_type': row['win_type']
+        })
+
+        # Add team 2's perspective
+        add_to_bucket(t2_score_rounded, t2_won)
+        games.append({
+            'match_id': match_id,
+            'date': row['match_date'],
+            'champion': row['t2_name'],
+            'champion_class': row['t2_class'],
+            'opponent': row['t1_name'],
+            'opponent_class': row['t1_class'],
+            'matchup_score': round(t2_score, 1),
+            'result': 'W' if t2_won else 'L',
             'win_type': row['win_type']
         })
 
