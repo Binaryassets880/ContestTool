@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grand Arena Contest Tool</title>
+
+    <!-- Tabulator CSS -->
+    <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="/static/styles.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Grand Arena Contest Tool</h1>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="upcoming">Upcoming Matchups</button>
+            <button class="tab" data-tab="schemes">Schemes</button>
+            <button class="tab" data-tab="analysis">Analysis</button>
+        </nav>
+
+        <main>
+            <section id="upcoming" class="tab-content active">
+                <div class="controls">
+                    <input type="text" id="search" placeholder="Search champions...">
+                    <select id="class-filter">
+                        <option value="">All Classes</option>
+                        <option value="Defender">Defender</option>
+                        <option value="Striker">Striker</option>
+                        <option value="Sprinter">Sprinter</option>
+                        <option value="Bruiser">Bruiser</option>
+                        <option value="Center">Center</option>
+                        <option value="Grinder">Grinder</option>
+                        <option value="Forward">Forward</option>
+                        <option value="Flanker">Flanker</option>
+                        <option value="Support">Support</option>
+                        <option value="Anchor">Anchor</option>
+                    </select>
+                </div>
+                <div id="table-wrapper">
+                    <div id="upcoming-table"></div>
+                    <div id="detail-panel" class="detail-panel hidden"></div>
+                </div>
+            </section>
+
+            <section id="schemes" class="tab-content">
+                <div class="schemes-header">
+                    <h2>Scheme Matcher</h2>
+                    <p>Find champions that match trait-based schemes for bonus points.</p>
+                </div>
+                <div class="controls">
+                    <select id="scheme-filter">
+                        <option value="">All Schemes</option>
+                        <option value="Costume Party">Costume Party</option>
+                        <option value="Shapeshifting">Shapeshifting</option>
+                        <option value="Midnight Strike">Midnight Strike</option>
+                        <option value="Dress to Impress">Dress to Impress</option>
+                        <option value="Housekeeping">Housekeeping</option>
+                        <option value="Dungaree Duel">Dungaree Duel</option>
+                        <option value="Tear Jerking">Tear Jerking</option>
+                        <option value="Golden Shower">Golden Shower</option>
+                        <option value="Rainbow Riot">Rainbow Riot</option>
+                        <option value="Divine Intervention">Divine Intervention</option>
+                        <option value="Whale Watching">Whale Watching</option>
+                        <option value="Call to Arms">Call to Arms</option>
+                        <option value="Malicious Intent">Malicious Intent</option>
+                    </select>
+                    <input type="text" id="scheme-search" placeholder="Search champions...">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="scheme-upcoming-only" checked>
+                        Only with upcoming games
+                    </label>
+                </div>
+                <div id="schemes-table-wrapper">
+                    <div id="schemes-table"></div>
+                    <div id="scheme-detail-panel" class="detail-panel hidden"></div>
+                </div>
+            </section>
+
+            <section id="analysis" class="tab-content">
+                <div class="analysis-header">
+                    <h2>Matchup Score Analysis <span class="info-icon" id="ms-info-btn">i</span></h2>
+                    <p>Backtesting matchup scores against historical results to find optimal thresholds.</p>
+                    <div class="info-overlay" id="ms-info-overlay">
+                        <div class="info-content">
+                            <h3>How Matchup Score (MS) Works</h3>
+                            <p><strong>MS is calculated using:</strong></p>
+                            <ul>
+                                <li><strong>Base Win Rate</strong> - Champion's historical win %</li>
+                                <li><strong>Class Matchup</strong> - Historical win % vs opponent's class (±10 pts max)</li>
+                                <li><strong>Elim Differential</strong> - Your supporters' career elims vs opponent's (±15 pts max)</li>
+                                <li><strong>Deposit Penalty</strong> - Defenders with high-deposit supporters get -3 pts</li>
+                            </ul>
+                            <p><strong>How to use MS:</strong></p>
+                            <ul>
+                                <li><span class="ms-good">MS 70+</span> = Strong edge (~85% win rate historically)</li>
+                                <li><span class="ms-ok">MS 60-69</span> = Favorable (~78% win rate)</li>
+                                <li><span class="ms-neutral">MS 50-59</span> = Slight edge (~67% win rate)</li>
+                                <li><span class="ms-bad">MS &lt;50</span> = Avoid if possible</li>
+                            </ul>
+                            <button class="close-info" onclick="document.getElementById('ms-info-overlay').classList.remove('show')">Got it</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="bucket-stats" class="bucket-stats"></div>
+                <div class="controls">
+                    <input type="text" id="analysis-search" placeholder="Search champions...">
+                    <select id="analysis-result-filter">
+                        <option value="">All Results</option>
+                        <option value="W">Wins Only</option>
+                        <option value="L">Losses Only</option>
+                    </select>
+                    <select id="analysis-ms-filter">
+                        <option value="">All Scores</option>
+                        <option value="80">MS 80+</option>
+                        <option value="70">MS 70+</option>
+                        <option value="60">MS 60+</option>
+                        <option value="50">MS 50+</option>
+                    </select>
+                </div>
+                <div id="analysis-table"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Tabulator JS -->
+    <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+    <!-- Custom JS -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

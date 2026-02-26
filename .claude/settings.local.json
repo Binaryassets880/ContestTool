@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3:*)",
+      "Bash(python -c:*)",
+      "Bash(pip install:*)",
+      "Bash(uvicorn:*)",
+      "Bash(curl:*)",
+      "Bash(python analysis.py:*)",
+      "Bash(python straw_analysis.py:*)",
+      "Bash(python deep_analysis.py:*)",
+      "Bash(python validate_formula.py:*)",
+      "Bash(python:*)",
+      "Bash(del:*)"
+    ]
+  }
+}
