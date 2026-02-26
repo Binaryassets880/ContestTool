@@ -1,11 +1,46 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+"""FastAPI application for Grand Arena Contest Tool."""
+
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from . import database
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="Grand Arena Contest Tool")
+from .feed import FeedCoordinator, FeedUnavailableError
+from .queries import (
+    get_champion_matchups,
+    get_historical_analysis,
+    get_schemes_data,
+    get_upcoming_summary,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan - initialize and cleanup feed."""
+    logger.info("Starting Grand Arena Contest Tool...")
+    feed = FeedCoordinator.get_instance()
+    try:
+        await feed.initialize()
+        logger.info("Feed coordinator initialized successfully")
+    except FeedUnavailableError as e:
+        logger.error(f"Failed to initialize feed: {e}")
+        # Allow startup to continue - will return 503 on API calls
+    yield
+    logger.info("Shutting down...")
+    await feed.shutdown()
+
+
+app = FastAPI(title="Grand Arena Contest Tool", lifespan=lifespan)
 
 # Serve static files
 static_dir = Path(__file__).parent / "static"
@@ -18,28 +53,67 @@ async def root():
     return FileResponse(static_dir / "index.html")
 
 
+@app.get("/api/health")
+async def health():
+    """Health check endpoint with feed status."""
+    feed = FeedCoordinator.get_instance()
+    return feed.get_health_info()
+
+
 @app.get("/api/upcoming")
-async def get_upcoming():
+async def api_upcoming():
     """Get all champions with their aggregated matchup scores for upcoming games."""
-    return database.get_upcoming_summary()
+    try:
+        return await get_upcoming_summary()
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/upcoming: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
 
 
 @app.get("/api/champions/{token_id}/matchups")
-async def get_champion_matchups(token_id: int):
+async def api_champion_matchups(token_id: int):
     """Get detailed matchup breakdown for a specific champion."""
-    result = database.get_champion_matchups(token_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Champion not found")
-    return result
+    try:
+        result = await get_champion_matchups(token_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Champion not found")
+        return result
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/champions/{token_id}/matchups: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
 
 
 @app.get("/api/analysis")
-async def get_analysis(limit: int = 1000):
+async def api_analysis(limit: int = 1000):
     """Get historical games with matchup scores for analysis."""
-    return database.get_historical_analysis(limit)
+    try:
+        return await get_historical_analysis(limit)
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/analysis: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
 
 
 @app.get("/api/schemes")
-async def get_schemes():
+async def api_schemes():
     """Get champions with their matching schemes and MS data."""
-    return database.get_schemes_data()
+    try:
+        return await get_schemes_data()
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/schemes: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
