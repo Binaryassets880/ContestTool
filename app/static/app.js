@@ -40,6 +40,9 @@ function initTabs() {
         tab.addEventListener('click', () => {
             if (tab.disabled) return;
 
+            // Clean up any open detail panels before switching
+            cleanupDetailPanels();
+
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
 
@@ -65,6 +68,51 @@ function initTabs() {
             }
         });
     });
+}
+
+// Clean up all detail panels and reset selection state
+function cleanupDetailPanels() {
+    // Reset upcoming tab state
+    if (selectedTokenId !== null) {
+        selectedTokenId = null;
+        if (upcomingTable) upcomingTable.deselectRow();
+    }
+    const upcomingPanel = document.getElementById('detail-panel');
+    if (upcomingPanel) {
+        upcomingPanel.classList.add('hidden');
+        upcomingPanel.innerHTML = '';
+        // Move panel back to its original container
+        const upcomingContainer = document.getElementById('upcoming');
+        if (upcomingContainer && upcomingPanel.parentNode !== upcomingContainer) {
+            upcomingContainer.appendChild(upcomingPanel);
+        }
+    }
+
+    // Reset analysis tab state
+    if (typeof selectedAnalysisMatchId !== 'undefined' && selectedAnalysisMatchId !== null) {
+        selectedAnalysisMatchId = null;
+        if (analysisTable) analysisTable.deselectRow();
+    }
+    const analysisPanel = document.getElementById('analysis-detail-panel');
+    if (analysisPanel) {
+        analysisPanel.classList.add('hidden');
+        analysisPanel.innerHTML = '';
+    }
+
+    // Reset schemes tab state
+    if (typeof selectedSchemeTokenId !== 'undefined' && selectedSchemeTokenId !== null) {
+        selectedSchemeTokenId = null;
+        if (schemesTable) schemesTable.deselectRow();
+    }
+    const schemePanel = document.getElementById('scheme-detail-panel');
+    if (schemePanel) {
+        schemePanel.classList.add('hidden');
+        schemePanel.innerHTML = '';
+        const schemesContainer = document.getElementById('schemes');
+        if (schemesContainer && schemePanel.parentNode !== schemesContainer) {
+            schemesContainer.appendChild(schemePanel);
+        }
+    }
 }
 
 // Load upcoming matchups data
