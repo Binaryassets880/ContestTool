@@ -260,24 +260,32 @@ async function showMatchupDetail(tokenId, rowElement) {
 
 // Format supporter info with name, class, and stats
 function formatSupporter(s) {
+    // Handle undefined/null supporters
+    if (!s) return '';
+
     // Extract ID from name if it's "Moki #1234" format, otherwise use token_id
-    let displayName = s.name;
+    let displayName = s.name || `#${s.token_id || '?'}`;
     if (s.name && s.name.startsWith('Moki #')) {
         displayName = s.name;  // Already has ID
     } else if (s.token_id) {
         displayName = `#${s.token_id}`;
     }
 
-    const elimClass = s.career_elims >= 2.0 ? 'high-elims' : (s.career_elims < 1.0 ? 'low-elims' : '');
+    const careerElims = s.career_elims ?? 0;
+    const careerDeps = s.career_deps ?? 0;
+    const careerWart = s.career_wart ?? 0;
+    const suppClass = s.class || 'Unknown';
+
+    const elimClass = careerElims >= 2.0 ? 'high-elims' : (careerElims < 1.0 ? 'low-elims' : '');
 
     return `
         <div class="supporter-card">
             <span class="supp-name">${displayName}</span>
-            <span class="class-badge class-${s.class}">${s.class}</span>
+            <span class="class-badge class-${suppClass}">${suppClass}</span>
             <span class="supp-stats">
-                <span class="${elimClass}" title="Career Avg Eliminations">${s.career_elims.toFixed(1)}e</span>
-                <span title="Career Avg Gacha Deposits">${s.career_deps.toFixed(1)}g</span>
-                <span title="Career Avg Wart Distance">${s.career_wart.toFixed(0)}w</span>
+                <span class="${elimClass}" title="Career Avg Eliminations">${careerElims.toFixed(1)}e</span>
+                <span title="Career Avg Gacha Deposits">${careerDeps.toFixed(1)}g</span>
+                <span title="Career Avg Wart Distance">${careerWart.toFixed(0)}w</span>
             </span>
         </div>
     `;
