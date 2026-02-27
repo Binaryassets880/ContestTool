@@ -252,6 +252,12 @@ async function showMatchupDetail(tokenId, rowElement) {
     try {
         const response = await fetch(`/api/champions/${tokenId}/matchups`);
         const data = await response.json();
+
+        if (!response.ok) {
+            panel.innerHTML = `<div class="loading">Error: ${data.detail || response.statusText}</div>`;
+            return;
+        }
+
         renderMatchupDetail(panel, data);
     } catch (error) {
         panel.innerHTML = `<div class="loading">Error loading details: ${error.message}</div>`;
@@ -293,8 +299,14 @@ function formatSupporter(s) {
 
 // Render the matchup detail table
 function renderMatchupDetail(container, data) {
+    // Handle error responses or missing data
+    if (!data || !data.champion) {
+        container.innerHTML = `<div class="loading">Error: No champion data available. ${data?.detail || ''}</div>`;
+        return;
+    }
+
     const champion = data.champion;
-    const matchups = data.matchups;
+    const matchups = data.matchups || [];
 
     container.innerHTML = `
         <h3>
@@ -743,6 +755,12 @@ async function showSchemeMatchupDetail(tokenId, rowElement) {
     try {
         const response = await fetch(`/api/champions/${tokenId}/matchups`);
         const data = await response.json();
+
+        if (!response.ok) {
+            panel.innerHTML = `<div class="loading">Error: ${data.detail || response.statusText}</div>`;
+            return;
+        }
+
         renderSchemeMatchupDetail(panel, data);
     } catch (error) {
         panel.innerHTML = `<div class="loading">Error loading details: ${error.message}</div>`;
@@ -751,8 +769,14 @@ async function showSchemeMatchupDetail(tokenId, rowElement) {
 
 // Render matchup detail in schemes tab
 function renderSchemeMatchupDetail(container, data) {
+    // Handle error responses or missing data
+    if (!data || !data.champion) {
+        container.innerHTML = `<div class="loading">Error: No champion data available. ${data?.detail || ''}</div>`;
+        return;
+    }
+
     const champion = data.champion;
-    const matchups = data.matchups;
+    const matchups = data.matchups || [];
 
     container.innerHTML = `
         <h3>

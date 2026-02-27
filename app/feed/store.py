@@ -148,6 +148,17 @@ class FeedDataStore:
             lambda: {"wins": 0, "games": 0, "name": "", "class": ""}
         )
 
+        # First, collect champion info from ALL matches (including scheduled)
+        # This ensures we have name/class even if no scored matches exist
+        for match_id, match in self.matches.items():
+            for player in match.players:
+                if player.get("is_champion"):
+                    token_id = player.get("token_id")
+                    if token_id and not champ_stats[token_id]["name"]:
+                        champ_stats[token_id]["name"] = player.get("name", "")
+                        champ_stats[token_id]["class"] = player.get("class", "")
+
+        # Then compute win rates from scored matches only
         for match_id in self.scored_matches:
             match = self.matches[match_id]
             for player in match.players:
@@ -159,8 +170,11 @@ class FeedDataStore:
                     champ_stats[token_id]["games"] += 1
                     if won:
                         champ_stats[token_id]["wins"] += 1
-                    champ_stats[token_id]["name"] = player.get("name", "")
-                    champ_stats[token_id]["class"] = player.get("class", "")
+                    # Update name/class in case we have better info from scored match
+                    if player.get("name"):
+                        champ_stats[token_id]["name"] = player.get("name", "")
+                    if player.get("class"):
+                        champ_stats[token_id]["class"] = player.get("class", "")
 
         self.champion_winrates = {
             token_id: {
