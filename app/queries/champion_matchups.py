@@ -4,6 +4,7 @@ from typing import Optional
 
 from ..feed import get_feed
 from .scoring import calc_matchup_score, get_edge_label
+from .fantasy import calc_projected_fp
 
 
 async def get_champion_matchups(token_id: int) -> Optional[dict]:
@@ -22,6 +23,9 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
         "class": champ_info["class"],
         "base_win_rate": champ_info["win_pct"],
     }
+
+    # Get champion's career stats for FP projection
+    champ_stats = store.get_career_stats(token_id)
 
     matchups = []
 
@@ -135,6 +139,14 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
             my_class,
         )
 
+        # Calculate projected FP for this matchup
+        proj_fp = calc_projected_fp(
+            champ_stats["career_elims"],
+            champ_stats["career_deps"],
+            champ_stats["career_wart"],
+            score,
+        )
+
         matchups.append(
             {
                 "date": match.match_date,
@@ -149,6 +161,7 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
                 "opp_avg_deps": round(opp_avg_deps, 2),
                 "score": round(score, 1),
                 "edge": get_edge_label(score),
+                "proj_fp": proj_fp,
             }
         )
 

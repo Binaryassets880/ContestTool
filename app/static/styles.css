@@ -716,3 +716,154 @@ header h1 {
     color: #888;
     font-style: italic;
 }
+
+/* Match ID link in Analysis table */
+.match-link {
+    color: #00d4ff;
+    text-decoration: none;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.match-link:hover {
+    text-decoration: underline;
+    color: #4de8ff;
+}
+
+/* Analysis Detail Panel */
+#analysis-detail-panel {
+    background: #252545;
+    border: 1px solid #444;
+    border-radius: 8px;
+    margin: 10px 0;
+    padding: 15px;
+}
+
+#analysis-detail-panel.hidden {
+    display: none;
+}
+
+.analysis-detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.analysis-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.analysis-detail-header h4 {
+    flex: 1;
+    font-size: 1.1rem;
+    color: #eee;
+}
+
+.analysis-detail-header .champion-name {
+    color: #00d4ff;
+}
+
+.analysis-detail-header .vs {
+    color: #888;
+    margin: 0 5px;
+}
+
+.analysis-detail-header .opponent-name {
+    color: #ff6b6b;
+}
+
+.view-match-btn {
+    background: #2a2a4a;
+    color: #00d4ff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    border: 1px solid #00d4ff;
+    transition: all 0.2s;
+}
+
+.view-match-btn:hover {
+    background: #00d4ff;
+    color: #1a1a2e;
+}
+
+.supporters-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.team-supporters {
+    background: #1a1a2e;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.team-supporters h5 {
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+    color: #ccc;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+}
+
+.my-team h5 {
+    color: #00d4ff;
+}
+
+.opp-team h5 {
+    color: #ff6b6b;
+}
+
+.team-supporters .supporter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.team-avg {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #333;
+    font-size: 0.85rem;
+    color: #888;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .supporters-comparison {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Fantasy Point Styling */
+.fp-high {
+    color: #00ff88 !important;
+    font-weight: bold;
+}
+
+.fp-average {
+    color: #ffcc00 !important;
+}
+
+.fp-low {
+    color: #ff6666 !important;
+}
+
+.fp-total {
+    color: #00d4ff;
+    font-weight: bold;
+}
+
+.fp-diff-pos {
+    color: #00ff88 !important;
+    font-weight: bold;
+}
+
+.fp-diff-neg {
+    color: #ff6666 !important;
+}

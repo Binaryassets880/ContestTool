@@ -93,7 +93,7 @@ async def api_champion_matchups(token_id: int):
 
 
 @app.get("/api/analysis")
-async def api_analysis(limit: int = 1000):
+async def api_analysis(limit: int = 50000):
     """Get historical games with matchup scores for analysis."""
     try:
         return await get_historical_analysis(limit)

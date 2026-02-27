@@ -2,9 +2,10 @@
 
 from ..feed import get_feed
 from .scoring import calc_matchup_score
+from .fantasy import calc_projected_fp, calc_actual_fp
 
 
-async def get_historical_analysis(limit: int = 1000) -> dict:
+async def get_historical_analysis(limit: int = 50000) -> dict:
     """
     Analyze historical games with calculated matchup scores.
     Uses POINT-IN-TIME data: for each game, calculates MS using only
@@ -23,6 +24,9 @@ async def get_historical_analysis(limit: int = 1000) -> dict:
         "40-49": {"wins": 0, "total": 0},
         "<40": {"wins": 0, "total": 0},
     }
+
+    # FP tracking for summary stats
+    fp_totals = {"proj_sum": 0.0, "actual_sum": 0.0, "count": 0}
 
     # Sort scored matches by date descending
     sorted_matches = sorted(
@@ -135,6 +139,59 @@ async def get_historical_analysis(limit: int = 1000) -> dict:
             if won:
                 ms_buckets[bucket]["wins"] += 1
 
+            # Get champion's point-in-time career stats for FP projection
+            champ_pit_stats = store.get_career_stats_before_date(my_token, match_date)
+            proj_fp = calc_projected_fp(
+                champ_pit_stats["career_elims"],
+                champ_pit_stats["career_deps"],
+                champ_pit_stats["career_wart"],
+                score_rounded,
+            )
+
+            # Get champion's actual performance from this match
+            actual_elims, actual_deps, actual_wart = 0.0, 0.0, 0.0
+            for perf in match.performances:
+                if perf.get("token_id") == my_token:
+                    actual_elims = perf.get("eliminations", 0) or 0
+                    actual_deps = perf.get("deposits", 0) or 0
+                    actual_wart = perf.get("wart_distance", 0) or 0
+                    break
+
+            actual_fp = calc_actual_fp(actual_elims, actual_deps, actual_wart, won)
+            fp_diff = round(actual_fp - proj_fp, 1)
+
+            # Track FP totals for summary
+            fp_totals["proj_sum"] += proj_fp
+            fp_totals["actual_sum"] += actual_fp
+            fp_totals["count"] += 1
+
+            # Build supporter info with point-in-time stats
+            my_supporters_info = []
+            for i, s in enumerate(supporters[my_team]):
+                if s.get("token_id"):
+                    stats = my_supp_stats[i] if i < len(my_supp_stats) else {}
+                    my_supporters_info.append({
+                        "token_id": s.get("token_id"),
+                        "name": s.get("name", ""),
+                        "class": s.get("class", ""),
+                        "career_elims": round(stats.get("career_elims", 1.0), 2),
+                        "career_deps": round(stats.get("career_deps", 1.5), 2),
+                        "career_wart": round(stats.get("career_wart", 0), 1),
+                    })
+
+            opp_supporters_info = []
+            for i, s in enumerate(supporters[opp_team]):
+                if s.get("token_id"):
+                    stats = opp_supp_stats[i] if i < len(opp_supp_stats) else {}
+                    opp_supporters_info.append({
+                        "token_id": s.get("token_id"),
+                        "name": s.get("name", ""),
+                        "class": s.get("class", ""),
+                        "career_elims": round(stats.get("career_elims", 1.0), 2),
+                        "career_deps": round(stats.get("career_deps", 1.5), 2),
+                        "career_wart": round(stats.get("career_wart", 0), 1),
+                    })
+
             games.append(
                 {
                     "match_id": match_id,
@@ -146,6 +203,11 @@ async def get_historical_analysis(limit: int = 1000) -> dict:
                     "matchup_score": score_rounded,
                     "result": "W" if won else "L",
                     "win_type": match.win_type,
+                    "my_supporters": my_supporters_info,
+                    "opp_supporters": opp_supporters_info,
+                    "proj_fp": proj_fp,
+                    "actual_fp": actual_fp,
+                    "fp_diff": fp_diff,
                 }
             )
 
@@ -167,4 +229,19 @@ async def get_historical_analysis(limit: int = 1000) -> dict:
             }
         )
 
-    return {"games": games, "bucket_stats": bucket_stats}
+    # Calculate FP summary stats
+    fp_stats = {
+        "avg_proj_fp": (
+            round(fp_totals["proj_sum"] / fp_totals["count"], 1)
+            if fp_totals["count"] > 0
+            else 0
+        ),
+        "avg_actual_fp": (
+            round(fp_totals["actual_sum"] / fp_totals["count"], 1)
+            if fp_totals["count"] > 0
+            else 0
+        ),
+        "total_games": fp_totals["count"],
+    }
+
+    return {"games": games, "bucket_stats": bucket_stats, "fp_stats": fp_stats}

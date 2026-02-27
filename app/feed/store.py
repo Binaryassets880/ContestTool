@@ -96,8 +96,8 @@ class FeedDataStore:
             if token_id:
                 self.matches_by_token[token_id].append(match.match_id)
 
-            # Track class history for champions
-            if player.get("is_champion") and token_id:
+            # Track class history for champions (scored matches only)
+            if player.get("is_champion") and token_id and match.state == "scored":
                 player_class = player.get("class", "")
                 if player_class:
                     self.class_history[token_id].append((match.match_date, player_class))

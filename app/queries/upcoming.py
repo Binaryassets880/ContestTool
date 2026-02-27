@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from ..feed import get_feed
 from .scoring import calc_matchup_score
+from .fantasy import calc_projected_fp
 
 
 async def get_upcoming_summary() -> list[dict]:
@@ -12,6 +13,7 @@ async def get_upcoming_summary() -> list[dict]:
     store = feed.store
 
     champ_scores: dict[int, list[float]] = defaultdict(list)
+    champ_fp: dict[int, list[float]] = defaultdict(list)  # FP projections per game
     champ_info: dict[int, dict] = {}
 
     for match_id in store.scheduled_matches:
@@ -98,6 +100,16 @@ async def get_upcoming_summary() -> list[dict]:
 
             champ_scores[token_id].append(score)
 
+            # Calculate projected fantasy points using CHAMPION's career stats
+            champ_stats = store.get_career_stats(token_id)
+            proj_fp = calc_projected_fp(
+                champ_stats["career_elims"],
+                champ_stats["career_deps"],
+                champ_stats["career_wart"],
+                score,
+            )
+            champ_fp[token_id].append(proj_fp)
+
             if token_id not in champ_info:
                 champ_info[token_id] = {
                     "token_id": token_id,
@@ -111,6 +123,10 @@ async def get_upcoming_summary() -> list[dict]:
     for token_id, scores in champ_scores.items():
         info = champ_info[token_id]
         expected_wins = sum(s / 100 for s in scores)
+        fp_list = champ_fp[token_id]
+        total_fp = sum(fp_list)
+        avg_fp = total_fp / len(fp_list) if fp_list else 0
+
         results.append(
             {
                 **info,
@@ -119,6 +135,8 @@ async def get_upcoming_summary() -> list[dict]:
                 "expected_wins": round(expected_wins, 1),
                 "favorable": sum(1 for s in scores if s >= 60),
                 "unfavorable": sum(1 for s in scores if s < 40),
+                "avg_proj_fp": round(avg_fp, 1),
+                "total_proj_fp": round(total_fp, 1),
             }
         )
 

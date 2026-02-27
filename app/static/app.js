@@ -181,6 +181,33 @@ function initUpcomingTable(data) {
                     return `<span class="${cls}">${val}</span>`;
                 },
                 sorter: "number"
+            },
+            {
+                title: "Avg FP",
+                field: "avg_proj_fp",
+                width: 80,
+                hozAlign: "center",
+                headerTooltip: "Average projected fantasy points per game (Elims×80 + Deps×50 + Wart×0.5625 + WinProb×300)",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    let cls = 'fp-average';
+                    if (val >= 400) cls = 'fp-high';
+                    else if (val < 300) cls = 'fp-low';
+                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                },
+                sorter: "number"
+            },
+            {
+                title: "Total FP",
+                field: "total_proj_fp",
+                width: 85,
+                hozAlign: "center",
+                headerTooltip: "Total projected fantasy points across all upcoming games",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    return `<span class="fp-total">${val.toFixed(1)}</span>`;
+                },
+                sorter: "number"
             }
         ],
 
@@ -397,6 +424,20 @@ function renderMatchupDetail(container, data) {
                     else if (val === 'Tough') cls = 'edge-tough';
                     return `<span class="${cls}">${val}</span>`;
                 }
+            },
+            {
+                title: "Proj FP",
+                field: "proj_fp",
+                width: 80,
+                hozAlign: "center",
+                headerTooltip: "Projected fantasy points (Elims×80 + Deps×50 + Wart×0.5625 + WinProb×300)",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    let cls = 'fp-average';
+                    if (val >= 400) cls = 'fp-high';
+                    else if (val < 300) cls = 'fp-low';
+                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                }
             }
         ],
 
@@ -414,7 +455,7 @@ async function loadAnalysisData() {
     container.innerHTML = '<div class="loading">Loading historical data...</div>';
 
     try {
-        const response = await fetch('/api/analysis?limit=2000');
+        const response = await fetch('/api/analysis');
         const data = await response.json();
         renderBucketStats(data.bucket_stats);
         initAnalysisTable(data.games);
@@ -446,6 +487,9 @@ function renderBucketStats(stats) {
     container.innerHTML = html;
 }
 
+// Track selected analysis row
+let selectedAnalysisMatchId = null;
+
 // Initialize the analysis table
 function initAnalysisTable(games) {
     analysisTable = new Tabulator("#analysis-table", {
@@ -454,8 +498,21 @@ function initAnalysisTable(games) {
         height: 500,
         pagination: true,
         paginationSize: 50,
+        selectable: 1,
 
         columns: [
+            {
+                title: "Match ID",
+                field: "match_id",
+                width: 110,
+                headerTooltip: "Click to view on Grand Arena",
+                formatter: function(cell) {
+                    const matchId = cell.getValue();
+                    // Show last 8 chars for brevity
+                    const shortId = matchId.slice(-8);
+                    return `<a href="https://train.grandarena.gg/matches/${matchId}" target="_blank" class="match-link" onclick="event.stopPropagation();">${shortId}</a>`;
+                }
+            },
             {
                 title: "Date",
                 field: "date",
@@ -466,7 +523,7 @@ function initAnalysisTable(games) {
                 title: "Champion",
                 field: "champion",
                 minWidth: 130,
-                headerTooltip: "Your champion"
+                headerTooltip: "Your champion - click row to see supporter details"
             },
             {
                 title: "Class",
@@ -525,12 +582,76 @@ function initAnalysisTable(games) {
                 field: "win_type",
                 width: 100,
                 headerTooltip: "How the game was won"
+            },
+            {
+                title: "Proj FP",
+                field: "proj_fp",
+                width: 75,
+                hozAlign: "center",
+                headerTooltip: "Projected fantasy points (calculated before game)",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    let cls = 'fp-average';
+                    if (val >= 400) cls = 'fp-high';
+                    else if (val < 300) cls = 'fp-low';
+                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                }
+            },
+            {
+                title: "Actual FP",
+                field: "actual_fp",
+                width: 80,
+                hozAlign: "center",
+                headerTooltip: "Actual fantasy points scored",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    let cls = 'fp-average';
+                    if (val >= 400) cls = 'fp-high';
+                    else if (val < 300) cls = 'fp-low';
+                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                }
+            },
+            {
+                title: "+/-",
+                field: "fp_diff",
+                width: 60,
+                hozAlign: "center",
+                headerTooltip: "Fantasy point difference (Actual - Projected). Positive = overperformed.",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    let cls = val >= 0 ? 'fp-diff-pos' : 'fp-diff-neg';
+                    let sign = val >= 0 ? '+' : '';
+                    return `<span class="${cls}">${sign}${val.toFixed(0)}</span>`;
+                }
             }
         ],
 
         initialSort: [
             { column: "date", dir: "desc" }
-        ]
+        ],
+
+        rowFormatter: function(row) {
+            row.getElement().style.cursor = 'pointer';
+        }
+    });
+
+    // Handle row click to expand supporter details
+    analysisTable.on("rowClick", function(e, row) {
+        // Don't expand if clicking on a link
+        if (e.target.tagName === 'A') return;
+
+        const data = row.getData();
+        const matchId = data.match_id;
+        const rowElement = row.getElement();
+
+        if (selectedAnalysisMatchId === matchId) {
+            hideAnalysisDetailPanel();
+            selectedAnalysisMatchId = null;
+            analysisTable.deselectRow();
+        } else {
+            selectedAnalysisMatchId = matchId;
+            showAnalysisDetail(data, rowElement);
+        }
     });
 
     // Set up filters
@@ -571,6 +692,70 @@ function applyAnalysisFilters() {
 
         return true;
     });
+}
+
+// Hide the analysis detail panel
+function hideAnalysisDetailPanel() {
+    const panel = document.getElementById('analysis-detail-panel');
+    if (panel) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+    }
+}
+
+// Show analysis detail for a match - positioned after clicked row
+function showAnalysisDetail(data, rowElement) {
+    // Get or create the detail panel
+    let panel = document.getElementById('analysis-detail-panel');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'analysis-detail-panel';
+        panel.className = 'detail-panel';
+        document.body.appendChild(panel);
+    }
+
+    panel.classList.remove('hidden');
+
+    // Move panel to appear right after the clicked row
+    rowElement.insertAdjacentElement('afterend', panel);
+
+    const result = data.result === 'W' ? 'Won' : 'Lost';
+    const resultClass = data.result === 'W' ? 'result-win' : 'result-loss';
+
+    panel.innerHTML = `
+        <div class="analysis-detail-content">
+            <div class="analysis-detail-header">
+                <h4>
+                    <span class="champion-name">${data.champion}</span>
+                    <span class="vs">vs</span>
+                    <span class="opponent-name">${data.opponent}</span>
+                    <span class="${resultClass}">(${result})</span>
+                </h4>
+                <a href="https://train.grandarena.gg/matches/${data.match_id}" target="_blank" class="view-match-btn">View on Grand Arena</a>
+                <button class="close-btn" onclick="hideAnalysisDetailPanel(); selectedAnalysisMatchId = null; analysisTable.deselectRow();">Close</button>
+            </div>
+            <div class="supporters-comparison">
+                <div class="team-supporters my-team">
+                    <h5>${data.champion}'s Supporters</h5>
+                    <div class="supporter-list">
+                        ${data.my_supporters.map(s => formatSupporter(s)).join('')}
+                    </div>
+                    <div class="team-avg">
+                        Avg Elims: ${(data.my_supporters.reduce((sum, s) => sum + s.career_elims, 0) / Math.max(data.my_supporters.length, 1)).toFixed(2)}
+                    </div>
+                </div>
+                <div class="team-supporters opp-team">
+                    <h5>${data.opponent}'s Supporters</h5>
+                    <div class="supporter-list">
+                        ${data.opp_supporters.map(s => formatSupporter(s)).join('')}
+                    </div>
+                    <div class="team-avg">
+                        Avg Elims: ${(data.opp_supporters.reduce((sum, s) => sum + s.career_elims, 0) / Math.max(data.opp_supporters.length, 1)).toFixed(2)}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 // ========== SCHEMES TAB ==========
