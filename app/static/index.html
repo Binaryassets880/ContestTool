@@ -97,12 +97,19 @@
                                 <li><strong>Deposit Penalty</strong> - Defenders with high-deposit supporters get -3 pts</li>
                             </ul>
                             <p><strong>How to use MS:</strong></p>
+                            <p>Higher MS = better win probability. See the bucket stats above for actual win rates by MS range based on historical data.</p>
+
+                            <h3>Fantasy Point Projections</h3>
+                            <p><strong>Scoring formula (champions only):</strong></p>
                             <ul>
-                                <li><span class="ms-good">MS 70+</span> = Strong edge (~85% win rate historically)</li>
-                                <li><span class="ms-ok">MS 60-69</span> = Favorable (~78% win rate)</li>
-                                <li><span class="ms-neutral">MS 50-59</span> = Slight edge (~67% win rate)</li>
-                                <li><span class="ms-bad">MS &lt;50</span> = Avoid if possible</li>
+                                <li><strong>Eliminations</strong> - 80 pts each</li>
+                                <li><strong>Deposits</strong> - 50 pts each</li>
+                                <li><strong>Wart Distance</strong> - 0.5625 pts per unit (45 per 80)</li>
+                                <li><strong>Victory</strong> - 300 pts</li>
                             </ul>
+                            <p><strong>Projected FP</strong> = Career avg stats + (MS/100 × 300)</p>
+                            <p><strong>Actual FP</strong> = Game stats + win bonus if won</p>
+                            <p><strong>+/-</strong> = Actual minus Projected (positive = overperformed)</p>
                             <button class="close-info" onclick="document.getElementById('ms-info-overlay').classList.remove('show')">Got it</button>
                         </div>
                     </div>

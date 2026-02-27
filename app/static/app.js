@@ -81,11 +81,6 @@ function cleanupDetailPanels() {
     if (upcomingPanel) {
         upcomingPanel.classList.add('hidden');
         upcomingPanel.innerHTML = '';
-        // Move panel back to its original container
-        const upcomingContainer = document.getElementById('upcoming');
-        if (upcomingContainer && upcomingPanel.parentNode !== upcomingContainer) {
-            upcomingContainer.appendChild(upcomingPanel);
-        }
     }
 
     // Reset analysis tab state
@@ -108,10 +103,6 @@ function cleanupDetailPanels() {
     if (schemePanel) {
         schemePanel.classList.add('hidden');
         schemePanel.innerHTML = '';
-        const schemesContainer = document.getElementById('schemes');
-        if (schemesContainer && schemePanel.parentNode !== schemesContainer) {
-            schemesContainer.appendChild(schemePanel);
-        }
     }
 }
 
@@ -285,6 +276,13 @@ function initUpcomingTable(data) {
 
     // Search filter
     document.getElementById('search').addEventListener('input', function() {
+        // Close any open detail panel before filtering
+        if (selectedTokenId !== null) {
+            hideDetailPanel();
+            selectedTokenId = null;
+            upcomingTable.deselectRow();
+        }
+
         const val = this.value.toLowerCase();
         upcomingTable.setFilter(function(data) {
             return data.name.toLowerCase().includes(val);
@@ -293,6 +291,13 @@ function initUpcomingTable(data) {
 
     // Class filter
     document.getElementById('class-filter').addEventListener('change', function() {
+        // Close any open detail panel before filtering
+        if (selectedTokenId !== null) {
+            hideDetailPanel();
+            selectedTokenId = null;
+            upcomingTable.deselectRow();
+        }
+
         const val = this.value;
         if (val) {
             upcomingTable.setFilter("class", "=", val);
@@ -315,14 +320,18 @@ function hideDetailPanel() {
     panel.innerHTML = '';
 }
 
-// Show matchup detail for a champion - positioned after clicked row
+// Show matchup detail for a champion - positioned below the table
 async function showMatchupDetail(tokenId, rowElement) {
     const panel = document.getElementById('detail-panel');
     panel.classList.remove('hidden');
     panel.innerHTML = '<div class="loading">Loading matchup details...</div>';
 
-    // Move panel to appear right after the clicked row
-    rowElement.insertAdjacentElement('afterend', panel);
+    // Keep panel in its original position (below the table) rather than inserting into Tabulator's DOM
+    // This avoids clipping issues when the table is filtered
+    const upcomingContainer = document.getElementById('upcoming');
+    if (panel.parentNode !== upcomingContainer) {
+        upcomingContainer.appendChild(panel);
+    }
 
     try {
         const response = await fetch(`/api/champions/${tokenId}/matchups`);
@@ -751,7 +760,7 @@ function hideAnalysisDetailPanel() {
     }
 }
 
-// Show analysis detail for a match - positioned after clicked row
+// Show analysis detail for a match - positioned below the table
 function showAnalysisDetail(data, rowElement) {
     // Get or create the detail panel
     let panel = document.getElementById('analysis-detail-panel');
@@ -759,13 +768,15 @@ function showAnalysisDetail(data, rowElement) {
         panel = document.createElement('div');
         panel.id = 'analysis-detail-panel';
         panel.className = 'detail-panel';
-        document.body.appendChild(panel);
     }
 
     panel.classList.remove('hidden');
 
-    // Move panel to appear right after the clicked row
-    rowElement.insertAdjacentElement('afterend', panel);
+    // Keep panel in its original position (below the table) rather than inserting into Tabulator's DOM
+    const analysisContainer = document.getElementById('analysis');
+    if (panel.parentNode !== analysisContainer) {
+        analysisContainer.appendChild(panel);
+    }
 
     const result = data.result === 'W' ? 'Won' : 'Lost';
     const resultClass = data.result === 'W' ? 'result-win' : 'result-loss';
@@ -982,8 +993,11 @@ async function showSchemeMatchupDetail(tokenId, rowElement) {
     panel.classList.remove('hidden');
     panel.innerHTML = '<div class="loading">Loading matchup details...</div>';
 
-    // Move panel to appear right after the clicked row
-    rowElement.insertAdjacentElement('afterend', panel);
+    // Keep panel in its original position (below the table) rather than inserting into Tabulator's DOM
+    const schemesContainer = document.getElementById('schemes');
+    if (panel.parentNode !== schemesContainer) {
+        schemesContainer.appendChild(panel);
+    }
 
     try {
         const response = await fetch(`/api/champions/${tokenId}/matchups`);
