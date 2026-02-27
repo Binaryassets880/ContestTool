@@ -3,6 +3,7 @@
 let upcomingTable = null;
 let analysisTable = null;
 let schemesTable = null;
+let classChangesTable = null;
 let selectedTokenId = null;
 let selectedSchemeTokenId = null;
 
@@ -56,6 +57,11 @@ function initTabs() {
             // Load schemes data when tab is clicked
             if (tabId === 'schemes' && !schemesTable) {
                 loadSchemesData();
+            }
+
+            // Load class changes data when tab is clicked
+            if (tabId === 'class-changes' && !classChangesTable) {
+                loadClassChangesData();
             }
         });
     });
@@ -795,5 +801,113 @@ function renderSchemeMatchupDetail(container, data) {
         ],
 
         initialSort: [{ column: "score", dir: "desc" }]
+    });
+}
+
+// ========== CLASS CHANGES TAB ==========
+
+// Load class changes data
+async function loadClassChangesData() {
+    const container = document.getElementById('class-changes-table');
+    container.innerHTML = '<div class="loading">Loading class changes...</div>';
+
+    try {
+        const response = await fetch('/api/class-changes');
+        const data = await response.json();
+        renderClassChangesSummary(data);
+        initClassChangesTable(data.changes);
+    } catch (error) {
+        container.innerHTML = `<div class="loading">Error loading data: ${error.message}</div>`;
+    }
+}
+
+// Render the class changes summary
+function renderClassChangesSummary(data) {
+    const container = document.getElementById('class-changes-summary');
+    const count = data.total_changes;
+
+    if (count === 0) {
+        container.innerHTML = `
+            <div class="summary-card">
+                <span class="summary-label">No class changes detected in recent match history.</span>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="summary-card">
+                <span class="summary-count">${count}</span>
+                <span class="summary-label">class change${count !== 1 ? 's' : ''} detected</span>
+            </div>
+        `;
+    }
+}
+
+// Initialize the class changes table
+function initClassChangesTable(changes) {
+    const container = document.getElementById('class-changes-table');
+
+    if (changes.length === 0) {
+        container.innerHTML = '<div class="no-data">No class changes found in recent match history.</div>';
+        return;
+    }
+
+    classChangesTable = new Tabulator("#class-changes-table", {
+        data: changes,
+        layout: "fitColumns",
+        height: 400,
+
+        columns: [
+            {
+                title: "Champion",
+                field: "name",
+                minWidth: 140,
+                headerTooltip: "Champion name"
+            },
+            {
+                title: "Old Class",
+                field: "old_class",
+                width: 110,
+                headerTooltip: "Previous class",
+                formatter: function(cell) {
+                    const cls = cell.getValue();
+                    return `<span class="class-badge class-${cls}">${cls}</span>`;
+                }
+            },
+            {
+                title: "",
+                field: "arrow",
+                width: 40,
+                hozAlign: "center",
+                formatter: function() {
+                    return '<span class="class-arrow">→</span>';
+                }
+            },
+            {
+                title: "New Class",
+                field: "new_class",
+                width: 110,
+                headerTooltip: "Current class",
+                formatter: function(cell) {
+                    const cls = cell.getValue();
+                    return `<span class="class-badge class-${cls}">${cls}</span>`;
+                }
+            },
+            {
+                title: "Change Date",
+                field: "change_date",
+                width: 120,
+                headerTooltip: "First match with new class"
+            },
+            {
+                title: "Last Old Class Match",
+                field: "last_match_as_old",
+                width: 150,
+                headerTooltip: "Last match played with old class"
+            }
+        ],
+
+        initialSort: [
+            { column: "change_date", dir: "desc" }
+        ]
     });
 }

@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from .feed import FeedCoordinator, FeedUnavailableError
 from .queries import (
     get_champion_matchups,
+    get_class_changes,
     get_historical_analysis,
     get_schemes_data,
     get_upcoming_summary,
@@ -112,6 +113,20 @@ async def api_schemes():
         return await get_schemes_data()
     except FeedUnavailableError as e:
         logger.error(f"Feed unavailable for /api/schemes: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
+
+
+@app.get("/api/class-changes")
+async def api_class_changes():
+    """Get champions that have changed class."""
+    try:
+        return await get_class_changes()
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/class-changes: {e}")
         raise HTTPException(
             status_code=503,
             detail="Feed data temporarily unavailable. Please try again later.",

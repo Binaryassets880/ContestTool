@@ -43,6 +43,11 @@ class FeedDataStore:
     class_matchup_winrates: dict[tuple[str, str], float] = field(default_factory=dict)
     champion_winrates: dict[int, dict] = field(default_factory=dict)
 
+    # Class change tracking
+    class_history: dict[int, list[tuple[str, str]]] = field(
+        default_factory=lambda: defaultdict(list)
+    )  # token_id -> [(match_date, class), ...]
+
     def clear(self):
         """Clear all data and indexes."""
         self.matches.clear()
@@ -53,6 +58,7 @@ class FeedDataStore:
         self.scored_matches.clear()
         self.class_matchup_winrates.clear()
         self.champion_winrates.clear()
+        self.class_history.clear()
 
     def load_partition(self, partition_data: list[dict]):
         """Load a partition into the store."""
@@ -89,6 +95,12 @@ class FeedDataStore:
             token_id = player.get("token_id")
             if token_id:
                 self.matches_by_token[token_id].append(match.match_id)
+
+            # Track class history for champions
+            if player.get("is_champion") and token_id:
+                player_class = player.get("class", "")
+                if player_class:
+                    self.class_history[token_id].append((match.match_date, player_class))
 
         if match.state == "scheduled":
             self.scheduled_matches.append(match.match_id)
@@ -266,3 +278,37 @@ class FeedDataStore:
     def get_champion_info(self, token_id: int) -> Optional[dict]:
         """Get basic champion info from winrates data."""
         return self.champion_winrates.get(token_id)
+
+    def get_class_changes(self) -> list[dict]:
+        """Detect all Mokis that have changed class.
+
+        Returns a list of class change events, sorted by change date descending.
+        """
+        changes = []
+        for token_id, history in self.class_history.items():
+            if len(history) < 2:
+                continue
+
+            # Sort by date
+            sorted_history = sorted(history, key=lambda x: x[0])
+
+            # Find changes
+            for i in range(1, len(sorted_history)):
+                prev_date, prev_class = sorted_history[i - 1]
+                curr_date, curr_class = sorted_history[i]
+
+                if prev_class != curr_class and prev_class and curr_class:
+                    champ_info = self.champion_winrates.get(token_id, {})
+                    changes.append(
+                        {
+                            "token_id": token_id,
+                            "name": champ_info.get("name", f"#{token_id}"),
+                            "old_class": prev_class,
+                            "new_class": curr_class,
+                            "change_date": curr_date,
+                            "last_match_as_old": prev_date,
+                        }
+                    )
+
+        # Sort by change date descending (most recent first)
+        return sorted(changes, key=lambda x: x["change_date"], reverse=True)

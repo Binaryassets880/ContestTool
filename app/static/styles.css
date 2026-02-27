@@ -660,3 +660,59 @@ header h1 {
     color: #666 !important;
     font-style: italic;
 }
+
+/* ========== CLASS CHANGES TAB ========== */
+
+.class-changes-header {
+    margin-bottom: 20px;
+}
+
+.class-changes-header h2 {
+    color: #00d4ff;
+    margin-bottom: 5px;
+}
+
+.class-changes-header p {
+    color: #888;
+    font-size: 0.9rem;
+}
+
+/* Summary card */
+.class-changes-summary {
+    margin-bottom: 20px;
+}
+
+.summary-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #2a2a4a;
+    border: 2px solid #00d4ff;
+    border-radius: 8px;
+    padding: 15px 25px;
+}
+
+.summary-count {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #00d4ff;
+}
+
+.summary-label {
+    color: #ccc;
+    font-size: 1rem;
+}
+
+/* Arrow between old and new class */
+.class-arrow {
+    font-size: 1.2rem;
+    color: #00d4ff;
+}
+
+/* No data message */
+.no-data {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+    font-style: italic;
+}

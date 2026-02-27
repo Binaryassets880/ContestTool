@@ -21,6 +21,7 @@
             <button class="tab active" data-tab="upcoming">Upcoming Matchups</button>
             <button class="tab" data-tab="schemes">Schemes</button>
             <button class="tab" data-tab="analysis">Analysis</button>
+            <button class="tab" data-tab="class-changes">Class Changes</button>
         </nav>
 
         <main>
@@ -123,6 +124,15 @@
                     </select>
                 </div>
                 <div id="analysis-table"></div>
+            </section>
+
+            <section id="class-changes" class="tab-content">
+                <div class="class-changes-header">
+                    <h2>Class Changes</h2>
+                    <p>Mokis that have recently changed class. Changes detected from match history.</p>
+                </div>
+                <div id="class-changes-summary" class="class-changes-summary"></div>
+                <div id="class-changes-table"></div>
             </section>
         </main>
     </div>
