@@ -22,6 +22,7 @@
             <button class="tab" data-tab="schemes">Schemes</button>
             <button class="tab" data-tab="analysis">Analysis</button>
             <button class="tab" data-tab="class-changes">Class Changes</button>
+            <button class="tab" data-tab="team-comps">Team Comps</button>
         </nav>
 
         <main>
@@ -88,28 +89,31 @@
                     <p>Backtesting matchup scores against historical results to find optimal thresholds.</p>
                     <div class="info-overlay" id="ms-info-overlay">
                         <div class="info-content">
-                            <h3>How Matchup Score (MS) Works</h3>
-                            <p><strong>MS is calculated using:</strong></p>
-                            <ul>
-                                <li><strong>Base Win Rate</strong> - Champion's historical win %</li>
-                                <li><strong>Class Matchup</strong> - Historical win % vs opponent's class (±10 pts max)</li>
-                                <li><strong>Elim Differential</strong> - Your supporters' career elims vs opponent's (±15 pts max)</li>
-                                <li><strong>Deposit Penalty</strong> - Defenders with high-deposit supporters get -3 pts</li>
-                            </ul>
-                            <p><strong>How to use MS:</strong></p>
-                            <p>Higher MS = better win probability. See the bucket stats above for actual win rates by MS range based on historical data.</p>
+                            <h3>Matchup Score (MS) v3.3</h3>
+                            <p><strong>MS = Base WR + Class Adj + Supporter Adj - Gacha Threat</strong></p>
+                            <p style="color:#00d4ff;font-size:12px;margin-bottom:10px;"><strong>Realistic bounds: 25-75</strong> (no matchup is ever 0% or 100%)</p>
 
-                            <h3>Fantasy Point Projections</h3>
-                            <p><strong>Scoring formula (champions only):</strong></p>
-                            <ul>
-                                <li><strong>Eliminations</strong> - 80 pts each</li>
-                                <li><strong>Deposits</strong> - 50 pts each</li>
-                                <li><strong>Wart Distance</strong> - 0.5625 pts per unit (45 per 80)</li>
-                                <li><strong>Victory</strong> - 300 pts</li>
+                            <h4 style="margin-top:15px;">Letter Grades</h4>
+                            <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;margin-bottom:12px;">
+                                <span style="background:#00ff88;color:#000;padding:3px 8px;border-radius:3px;font-weight:bold;">A (70+) Must-play</span>
+                                <span style="background:#88ff88;color:#000;padding:3px 8px;border-radius:3px;">B (60-69) Good</span>
+                                <span style="background:#ffcc00;color:#000;padding:3px 8px;border-radius:3px;">C (50-59) Coin flip</span>
+                                <span style="background:#ff9900;color:#000;padding:3px 8px;border-radius:3px;">D (40-49) Avoid</span>
+                                <span style="background:#ff4444;color:#fff;padding:3px 8px;border-radius:3px;font-weight:bold;">F (&lt;40) Bad</span>
+                            </div>
+
+                            <h4>Formula Components</h4>
+                            <ul style="font-size:13px;">
+                                <li><strong>Base WR</strong> - Champion's historical win %</li>
+                                <li><strong>Class Adj</strong> - (class matchup - 50) × 0.6, ±15 pts max</li>
+                                <li><strong>Supporter Adj</strong> - Elim diff helps, dep diff hurts</li>
+                                <li><strong>Gacha Threat</strong> - Penalty vs Strikers/Grinders with high-dep teams</li>
                             </ul>
-                            <p><strong>Projected FP</strong> = Career avg stats + (MS/100 × 300)</p>
-                            <p><strong>Actual FP</strong> = Game stats + win bonus if won</p>
-                            <p><strong>+/-</strong> = Actual minus Projected (positive = overperformed)</p>
+
+                            <p style="color:#ff9800;font-size:12px;margin-top:10px;"><strong>Key:</strong> Elim supporters = good. Deposit supporters = usually bad (sacrifice offense).</p>
+
+                            <h4 style="margin-top:15px;">Fantasy Points (FP)</h4>
+                            <p style="font-size:12px;">Elims×80 + Deps×50 + Wart×0.56 + Win×300</p>
                             <button class="close-info" onclick="document.getElementById('ms-info-overlay').classList.remove('show')">Got it</button>
                         </div>
                     </div>
@@ -123,11 +127,11 @@
                         <option value="L">Losses Only</option>
                     </select>
                     <select id="analysis-ms-filter">
-                        <option value="">All Scores</option>
-                        <option value="80">MS 80+</option>
-                        <option value="70">MS 70+</option>
-                        <option value="60">MS 60+</option>
-                        <option value="50">MS 50+</option>
+                        <option value="">All Grades</option>
+                        <option value="A">Grade A+ (must-play)</option>
+                        <option value="B">Grade B+ (good)</option>
+                        <option value="C">Grade C+ (coin flip)</option>
+                        <option value="D">Grade D+ (avoid)</option>
                     </select>
                 </div>
                 <div id="analysis-table"></div>
@@ -140,6 +144,35 @@
                 </div>
                 <div id="class-changes-summary" class="class-changes-summary"></div>
                 <div id="class-changes-table"></div>
+            </section>
+
+            <section id="team-comps" class="tab-content">
+                <div class="team-comps-header">
+                    <h2>Team Compositions</h2>
+                    <p>Historical win rates for champion class + supporter role combinations.</p>
+                </div>
+                <div class="controls">
+                    <select id="comp-class-filter">
+                        <option value="">All Classes</option>
+                        <option value="Defender">Defender</option>
+                        <option value="Striker">Striker</option>
+                        <option value="Sprinter">Sprinter</option>
+                        <option value="Bruiser">Bruiser</option>
+                        <option value="Center">Center</option>
+                        <option value="Grinder">Grinder</option>
+                        <option value="Forward">Forward</option>
+                        <option value="Flanker">Flanker</option>
+                        <option value="Support">Support</option>
+                        <option value="Anchor">Anchor</option>
+                    </select>
+                    <select id="comp-min-games">
+                        <option value="50">50+ games</option>
+                        <option value="30">30+ games</option>
+                        <option value="20">20+ games</option>
+                        <option value="10">10+ games</option>
+                    </select>
+                </div>
+                <div id="team-comps-table"></div>
             </section>
         </main>
     </div>

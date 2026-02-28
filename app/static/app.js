@@ -4,14 +4,17 @@ let upcomingTable = null;
 let analysisTable = null;
 let schemesTable = null;
 let classChangesTable = null;
+let teamCompsTable = null;
 let selectedTokenId = null;
 let selectedSchemeTokenId = null;
+let upcomingFiltersInitialized = false;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     loadUpcomingData();
     initInfoOverlay();
+    initUpcomingFilters();
 });
 
 // Initialize info overlay toggle
@@ -66,27 +69,39 @@ function initTabs() {
             if (tabId === 'class-changes' && !classChangesTable) {
                 loadClassChangesData();
             }
+
+            // Load team comps data when tab is clicked
+            if (tabId === 'team-comps' && !teamCompsTable) {
+                loadTeamCompsData();
+            }
         });
     });
 }
 
 // Clean up all detail panels and reset selection state
 function cleanupDetailPanels() {
-    // Reset upcoming tab state
-    if (selectedTokenId !== null) {
-        selectedTokenId = null;
-        if (upcomingTable) upcomingTable.deselectRow();
+    // Reset upcoming tab state - always clean up fully
+    selectedTokenId = null;
+    if (upcomingTable) {
+        upcomingTable.deselectRow();
     }
     const upcomingPanel = document.getElementById('detail-panel');
     if (upcomingPanel) {
         upcomingPanel.classList.add('hidden');
         upcomingPanel.innerHTML = '';
+        // Move panel back to container to avoid DOM issues
+        const container = document.getElementById('table-wrapper');
+        if (container && upcomingPanel.parentNode !== container) {
+            container.appendChild(upcomingPanel);
+        }
     }
 
     // Reset analysis tab state
-    if (typeof selectedAnalysisMatchId !== 'undefined' && selectedAnalysisMatchId !== null) {
+    if (typeof selectedAnalysisMatchId !== 'undefined') {
         selectedAnalysisMatchId = null;
-        if (analysisTable) analysisTable.deselectRow();
+    }
+    if (analysisTable) {
+        analysisTable.deselectRow();
     }
     const analysisPanel = document.getElementById('analysis-detail-panel');
     if (analysisPanel) {
@@ -95,9 +110,11 @@ function cleanupDetailPanels() {
     }
 
     // Reset schemes tab state
-    if (typeof selectedSchemeTokenId !== 'undefined' && selectedSchemeTokenId !== null) {
+    if (typeof selectedSchemeTokenId !== 'undefined') {
         selectedSchemeTokenId = null;
-        if (schemesTable) schemesTable.deselectRow();
+    }
+    if (schemesTable) {
+        schemesTable.deselectRow();
     }
     const schemePanel = document.getElementById('scheme-detail-panel');
     if (schemePanel) {
@@ -181,39 +198,41 @@ function initUpcomingTable(data) {
                 sorter: "number"
             },
             {
-                title: "Avg Score",
-                field: "avg_score",
-                width: 90,
+                title: "Avg Grade",
+                field: "avg_grade",
+                width: 80,
                 hozAlign: "center",
-                headerTooltip: "Average matchup score across all upcoming games (0-100). Higher = better matchups.",
+                headerTooltip: "Average grade across all upcoming games. A=must-play, B=good, C=coinflip, D=avoid, F=bad",
                 formatter: function(cell) {
                     const val = cell.getValue();
-                    let cls = 'score-medium';
-                    if (val >= 60) cls = 'score-high';
-                    else if (val < 40) cls = 'score-low';
-                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                    let cls = 'grade-c';
+                    if (val === 'A') cls = 'grade-a';
+                    else if (val === 'B') cls = 'grade-b';
+                    else if (val === 'D') cls = 'grade-d';
+                    else if (val === 'F') cls = 'grade-f';
+                    return `<span class="${cls}">${val}</span>`;
                 }
             },
             {
-                title: "Favorable",
-                field: "favorable",
-                width: 100,
+                title: "A/B",
+                field: "good_games",
+                width: 60,
                 hozAlign: "center",
-                headerTooltip: "Games with matchup score >= 60 (good odds to win)",
+                headerTooltip: "Number of Grade A or B games (favorable matchups)",
                 formatter: function(cell) {
                     const val = cell.getValue();
                     const total = cell.getRow().getData().games;
-                    const cls = val >= total * 0.6 ? 'favorable-high' : '';
+                    const cls = val >= total * 0.5 ? 'favorable-high' : '';
                     return `<span class="${cls}">${val}</span>`;
                 },
                 sorter: "number"
             },
             {
-                title: "Unfavorable",
-                field: "unfavorable",
-                width: 100,
+                title: "D/F",
+                field: "bad_games",
+                width: 60,
                 hozAlign: "center",
-                headerTooltip: "Games with matchup score < 40 (tough matchups)",
+                headerTooltip: "Number of Grade D or F games (tough matchups)",
                 formatter: function(cell) {
                     const val = cell.getValue();
                     const cls = val > 5 ? 'unfavorable-high' : '';
@@ -247,6 +266,17 @@ function initUpcomingTable(data) {
                     return `<span class="fp-total">${val.toFixed(1)}</span>`;
                 },
                 sorter: "number"
+            },
+            {
+                title: "Pattern",
+                field: "team_pattern",
+                width: 80,
+                hozAlign: "center",
+                headerTooltip: "Most common team composition pattern: 2G=2 gacha, 2E=2 elim, LONE=lone gacha, MIX=mixed",
+                formatter: function(cell) {
+                    const val = cell.getValue() || "BAL";
+                    return formatPatternBadge(val);
+                }
             }
         ],
 
@@ -273,9 +303,17 @@ function initUpcomingTable(data) {
             showMatchupDetail(tokenId, rowElement);
         }
     });
+}
+
+// Initialize filters for upcoming table (called once on page load)
+function initUpcomingFilters() {
+    if (upcomingFiltersInitialized) return;
+    upcomingFiltersInitialized = true;
 
     // Search filter
     document.getElementById('search').addEventListener('input', function() {
+        if (!upcomingTable) return;
+
         // Close any open detail panel before filtering
         if (selectedTokenId !== null) {
             hideDetailPanel();
@@ -284,13 +322,24 @@ function initUpcomingTable(data) {
         }
 
         const val = this.value.toLowerCase();
-        upcomingTable.setFilter(function(data) {
-            return data.name.toLowerCase().includes(val);
-        });
+        const classVal = document.getElementById('class-filter').value;
+
+        // Clear and reapply all filters
+        upcomingTable.clearFilter();
+        if (val) {
+            upcomingTable.addFilter(function(data) {
+                return data.name.toLowerCase().includes(val);
+            });
+        }
+        if (classVal) {
+            upcomingTable.addFilter("class", "=", classVal);
+        }
     });
 
     // Class filter
     document.getElementById('class-filter').addEventListener('change', function() {
+        if (!upcomingTable) return;
+
         // Close any open detail panel before filtering
         if (selectedTokenId !== null) {
             hideDetailPanel();
@@ -299,15 +348,16 @@ function initUpcomingTable(data) {
         }
 
         const val = this.value;
+        const searchVal = document.getElementById('search').value.toLowerCase();
+
+        // Clear and reapply all filters
+        upcomingTable.clearFilter();
         if (val) {
-            upcomingTable.setFilter("class", "=", val);
-        } else {
-            upcomingTable.clearFilter();
+            upcomingTable.addFilter("class", "=", val);
         }
-        const searchVal = document.getElementById('search').value;
         if (searchVal) {
             upcomingTable.addFilter(function(data) {
-                return data.name.toLowerCase().includes(searchVal.toLowerCase());
+                return data.name.toLowerCase().includes(searchVal);
             });
         }
     });
@@ -318,19 +368,23 @@ function hideDetailPanel() {
     const panel = document.getElementById('detail-panel');
     panel.classList.add('hidden');
     panel.innerHTML = '';
+    // Move panel back to its original container to avoid DOM issues
+    const container = document.getElementById('table-wrapper');
+    if (panel.parentNode !== container) {
+        container.appendChild(panel);
+    }
 }
 
-// Show matchup detail for a champion - positioned below the table
+// Show matchup detail for a champion - inline under the clicked row
 async function showMatchupDetail(tokenId, rowElement) {
     const panel = document.getElementById('detail-panel');
     panel.classList.remove('hidden');
     panel.innerHTML = '<div class="loading">Loading matchup details...</div>';
 
-    // Keep panel in its original position (below the table) rather than inserting into Tabulator's DOM
-    // This avoids clipping issues when the table is filtered
-    const upcomingContainer = document.getElementById('upcoming');
-    if (panel.parentNode !== upcomingContainer) {
-        upcomingContainer.appendChild(panel);
+    // Insert the panel directly after the clicked row in the table
+    // This makes it appear inline, expanding under the selected champion
+    if (rowElement && rowElement.parentNode) {
+        rowElement.parentNode.insertBefore(panel, rowElement.nextSibling);
     }
 
     try {
@@ -346,6 +400,25 @@ async function showMatchupDetail(tokenId, rowElement) {
     } catch (error) {
         panel.innerHTML = `<div class="loading">Error loading details: ${error.message}</div>`;
     }
+}
+
+// Format team composition pattern badge
+function formatPatternBadge(pattern) {
+    const patternInfo = {
+        "2G_AA": { short: "2G-AA", color: "#00d4ff", title: "Double Gacha (A+A) - Two elite depositors" },
+        "2G_AB": { short: "2G-AB", color: "#00aacc", title: "Double Gacha (A+B) - Elite + good depositor" },
+        "2G_BB": { short: "2G-BB", color: "#008899", title: "Double Gacha (B+B) - Two decent depositors" },
+        "2E_AA": { short: "2E-AA", color: "#ff4444", title: "Double Elim (A+A) - Two elite eliminators" },
+        "2E_AB": { short: "2E-AB", color: "#cc3333", title: "Double Elim (A+B) - Elite + good eliminator" },
+        "2E_BB": { short: "2E-BB", color: "#992222", title: "Double Elim (B+B) - Two decent eliminators" },
+        "LONE_G": { short: "LONE", color: "#ff9900", title: "Lone Gacha - Single depositor racing alone (liability!)" },
+        "MIXED": { short: "MIX", color: "#aa88ff", title: "Mixed - Gacha + Elim supporters" },
+        "WART": { short: "WART", color: "#88aa88", title: "Wart Focus - High wart distance supporters" },
+        "BALANCED": { short: "BAL", color: "#888888", title: "Balanced - No strong specialization" }
+    };
+
+    const info = patternInfo[pattern] || { short: pattern?.substring(0, 4) || "?", color: "#888888", title: pattern || "Unknown" };
+    return `<span class="pattern-badge" style="background: ${info.color}; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;" title="${info.title}">${info.short}</span>`;
 }
 
 // Format supporter info with name, class, and stats
@@ -392,16 +465,28 @@ function renderMatchupDetail(container, data) {
     const champion = data.champion;
     const matchups = data.matchups || [];
 
+    // Calculate stat-based FP (without win bonus) for display
+    const statFP = (champion.avg_elims * 80) + (champion.avg_deps * 50) + (champion.avg_wart * 0.5625);
+
     container.innerHTML = `
         <h3>
             <span>${champion.name}'s Upcoming Schedule (${matchups.length} games)</span>
             <div class="score-legend">
-                <span class="legend-item"><span class="score-high">Green</span> = Favorable (60+)</span>
-                <span class="legend-item"><span class="score-medium">Yellow</span> = Even (40-60)</span>
-                <span class="legend-item"><span class="score-low">Red</span> = Tough (&lt;40)</span>
+                <span class="legend-item"><span class="grade-a">A</span>=must-play</span>
+                <span class="legend-item"><span class="grade-b">B</span>=good</span>
+                <span class="legend-item"><span class="grade-c">C</span>=coinflip</span>
+                <span class="legend-item"><span class="grade-d">D</span>=avoid</span>
+                <span class="legend-item"><span class="grade-f">F</span>=bad</span>
             </div>
             <button class="close-btn" onclick="hideDetailPanel(); selectedTokenId = null; upcomingTable.deselectRow();">Close</button>
         </h3>
+        <div class="fp-breakdown">
+            <span class="fp-breakdown-title">FP Projection:</span>
+            <span class="fp-stat">${champion.avg_elims.toFixed(1)} elims × 80 = ${(champion.avg_elims * 80).toFixed(0)}</span>
+            <span class="fp-stat">${champion.avg_deps.toFixed(1)}g × 50 = ${(champion.avg_deps * 50).toFixed(0)}</span>
+            <span class="fp-stat">${champion.avg_wart.toFixed(0)} wart × 0.56 = ${(champion.avg_wart * 0.5625).toFixed(0)}</span>
+            <span class="fp-stat fp-stat-total">Stats: ${statFP.toFixed(0)} + Win Bonus</span>
+        </div>
         <div id="detail-table"></div>
     `;
 
@@ -421,13 +506,13 @@ function renderMatchupDetail(container, data) {
             {
                 title: "Opponent",
                 field: "opponent",
-                minWidth: 110,
+                width: 100,
                 headerTooltip: "Opponent champion name"
             },
             {
                 title: "Class",
                 field: "opponent_class",
-                width: 90,
+                width: 85,
                 headerTooltip: "Opponent champion class",
                 formatter: function(cell) {
                     const cls = cell.getValue();
@@ -457,35 +542,47 @@ function renderMatchupDetail(container, data) {
             {
                 title: "Score",
                 field: "score",
-                width: 70,
+                width: 55,
                 hozAlign: "center",
-                headerTooltip: "Matchup score (0-100): Based on your base WR, class advantage, supporter elims vs opponent elims",
+                headerTooltip: "Matchup score (25-75): Win probability based on class, supporters, etc.",
                 formatter: function(cell) {
                     const val = cell.getValue();
                     let cls = 'score-medium';
                     if (val >= 60) cls = 'score-high';
                     else if (val < 40) cls = 'score-low';
-                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                    return `<span class="${cls}">${val.toFixed(0)}</span>`;
                 }
             },
             {
-                title: "Edge",
-                field: "edge",
-                width: 90,
+                title: "Grade",
+                field: "grade",
+                width: 55,
                 hozAlign: "center",
-                headerTooltip: "Favorable (60+), Even (40-60), or Tough (<40)",
+                headerTooltip: "V4 Grade: A=must-play (70+), B=good (60-69), C=coinflip (50-59), D=avoid (40-49), F=bad (<40)",
                 formatter: function(cell) {
                     const val = cell.getValue();
-                    let cls = 'edge-even';
-                    if (val === 'Favorable') cls = 'edge-favorable';
-                    else if (val === 'Tough') cls = 'edge-tough';
+                    let cls = 'grade-c';
+                    if (val === 'A') cls = 'grade-a';
+                    else if (val === 'B') cls = 'grade-b';
+                    else if (val === 'D') cls = 'grade-d';
+                    else if (val === 'F') cls = 'grade-f';
                     return `<span class="${cls}">${val}</span>`;
+                }
+            },
+            {
+                title: "Comp",
+                field: "my_pattern",
+                width: 70,
+                hozAlign: "center",
+                headerTooltip: "Your team composition pattern",
+                formatter: function(cell) {
+                    return formatPatternBadge(cell.getValue());
                 }
             },
             {
                 title: "Proj FP",
                 field: "proj_fp",
-                width: 80,
+                width: 75,
                 hozAlign: "center",
                 headerTooltip: "Projected fantasy points (Elims×80 + Deps×50 + Wart×0.5625 + WinProb×300)",
                 formatter: function(cell) {
@@ -493,13 +590,13 @@ function renderMatchupDetail(container, data) {
                     let cls = 'fp-average';
                     if (val >= 400) cls = 'fp-high';
                     else if (val < 300) cls = 'fp-low';
-                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                    return `<span class="${cls}">${val.toFixed(0)}</span>`;
                 }
             }
         ],
 
         initialSort: [
-            { column: "score", dir: "desc" }
+            { column: "date", dir: "desc" }
         ]
     });
 }
@@ -514,26 +611,40 @@ async function loadAnalysisData() {
     try {
         const response = await fetch('/api/analysis');
         const data = await response.json();
-        renderBucketStats(data.bucket_stats);
+        renderBucketStats(data.bucket_stats, data.bucket_stats_v4);
         initAnalysisTable(data.games);
     } catch (error) {
         container.innerHTML = `<div class="loading">Error loading data: ${error.message}</div>`;
     }
 }
 
-// Render the win rate by MS bucket summary
-function renderBucketStats(stats) {
+// Render the win rate by grade bucket summary
+function renderBucketStats(statsV3, statsV4) {
     const container = document.getElementById('bucket-stats');
 
+    // Grade descriptions for tooltips
+    const gradeDescriptions = {
+        'A': 'Must-play (70+)',
+        'B': 'Good (60-69)',
+        'C': 'Coin flip (50-59)',
+        'D': 'Avoid (40-49)',
+        'F': 'Bad (<40)'
+    };
+
     let html = '<div class="bucket-cards">';
-    stats.forEach(bucket => {
+    statsV4.forEach(bucket => {
         let colorClass = 'bucket-neutral';
-        if (bucket.win_rate >= 60) colorClass = 'bucket-good';
-        else if (bucket.win_rate < 50) colorClass = 'bucket-bad';
+        if (bucket.grade === 'A') colorClass = 'bucket-grade-a';
+        else if (bucket.grade === 'B') colorClass = 'bucket-grade-b';
+        else if (bucket.grade === 'C') colorClass = 'bucket-grade-c';
+        else if (bucket.grade === 'D') colorClass = 'bucket-grade-d';
+        else if (bucket.grade === 'F') colorClass = 'bucket-grade-f';
+
+        const desc = gradeDescriptions[bucket.grade] || '';
 
         html += `
-            <div class="bucket-card ${colorClass}">
-                <div class="bucket-range">MS ${bucket.range}</div>
+            <div class="bucket-card ${colorClass}" title="${desc}">
+                <div class="bucket-grade">Grade ${bucket.grade}</div>
                 <div class="bucket-winrate">${bucket.win_rate}%</div>
                 <div class="bucket-sample">${bucket.wins}/${bucket.games} wins</div>
             </div>
@@ -609,17 +720,39 @@ function initAnalysisTable(games) {
                 }
             },
             {
-                title: "MS",
-                field: "matchup_score",
-                width: 70,
+                title: "Grade",
+                field: "grade_v4",
+                width: 55,
                 hozAlign: "center",
-                headerTooltip: "Matchup Score (calculated before game)",
+                headerTooltip: "Grade: A=must-play (70+), B=good (60-69), C=coinflip (50-59), D=avoid (40-49), F=bad (<40)",
                 formatter: function(cell) {
                     const val = cell.getValue();
-                    let cls = 'score-medium';
-                    if (val >= 70) cls = 'score-high';
-                    else if (val < 50) cls = 'score-low';
+                    let cls = 'grade-c';
+                    if (val === 'A') cls = 'grade-a';
+                    else if (val === 'B') cls = 'grade-b';
+                    else if (val === 'D') cls = 'grade-d';
+                    else if (val === 'F') cls = 'grade-f';
                     return `<span class="${cls}">${val}</span>`;
+                }
+            },
+            {
+                title: "My Comp",
+                field: "my_pattern",
+                width: 75,
+                hozAlign: "center",
+                headerTooltip: "Your team composition pattern",
+                formatter: function(cell) {
+                    return formatPatternBadge(cell.getValue());
+                }
+            },
+            {
+                title: "Opp Comp",
+                field: "opp_pattern",
+                width: 75,
+                hozAlign: "center",
+                headerTooltip: "Opponent team composition pattern",
+                formatter: function(cell) {
+                    return formatPatternBadge(cell.getValue());
                 }
             },
             {
@@ -729,7 +862,10 @@ function initAnalysisTable(games) {
 function applyAnalysisFilters() {
     const searchVal = document.getElementById('analysis-search').value.toLowerCase();
     const resultVal = document.getElementById('analysis-result-filter').value;
-    const msVal = document.getElementById('analysis-ms-filter').value;
+    const gradeVal = document.getElementById('analysis-ms-filter').value;
+
+    // Grade order for filtering (A is best, F is worst)
+    const gradeOrder = { 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'F': 1 };
 
     analysisTable.setFilter(function(data) {
         // Search filter - only match champion column (to see matchups from their perspective)
@@ -742,8 +878,8 @@ function applyAnalysisFilters() {
             return false;
         }
 
-        // MS filter
-        if (msVal && data.matchup_score < parseInt(msVal)) {
+        // Grade filter - show grades at or better than selected
+        if (gradeVal && gradeOrder[data.grade_v4] < gradeOrder[gradeVal]) {
             return false;
         }
 
@@ -1054,26 +1190,28 @@ function renderSchemeMatchupDetail(container, data) {
             {
                 title: "Score",
                 field: "score",
-                width: 70,
+                width: 55,
                 hozAlign: "center",
                 formatter: function(cell) {
                     const val = cell.getValue();
                     let cls = 'score-medium';
-                    if (val >= 70) cls = 'score-high';
-                    else if (val < 50) cls = 'score-low';
-                    return `<span class="${cls}">${val.toFixed(1)}</span>`;
+                    if (val >= 60) cls = 'score-high';
+                    else if (val < 40) cls = 'score-low';
+                    return `<span class="${cls}">${val.toFixed(0)}</span>`;
                 }
             },
             {
-                title: "Edge",
-                field: "edge",
-                width: 90,
+                title: "Grade",
+                field: "grade",
+                width: 55,
                 hozAlign: "center",
                 formatter: function(cell) {
                     const val = cell.getValue();
-                    let cls = 'edge-even';
-                    if (val === 'Favorable') cls = 'edge-favorable';
-                    else if (val === 'Tough') cls = 'edge-tough';
+                    let cls = 'grade-c';
+                    if (val === 'A') cls = 'grade-a';
+                    else if (val === 'B') cls = 'grade-b';
+                    else if (val === 'D') cls = 'grade-d';
+                    else if (val === 'F') cls = 'grade-f';
                     return `<span class="${cls}">${val}</span>`;
                 }
             }
@@ -1188,5 +1326,190 @@ function initClassChangesTable(changes) {
         initialSort: [
             { column: "change_date", dir: "desc" }
         ]
+    });
+}
+
+// ========== TEAM COMPS TAB ==========
+
+// Load team composition data
+async function loadTeamCompsData() {
+    const container = document.getElementById('team-comps-table');
+    container.innerHTML = '<div class="loading">Loading team compositions...</div>';
+
+    const minGames = document.getElementById('comp-min-games').value || 50;
+
+    try {
+        const response = await fetch(`/api/composition-table?min_games=${minGames}`);
+        const data = await response.json();
+        initTeamCompsTable(data);
+    } catch (error) {
+        container.innerHTML = `<div class="loading">Error loading data: ${error.message}</div>`;
+    }
+}
+
+// Format supporter role badge
+function formatRoleBadge(role) {
+    const roleInfo = {
+        "ELIM": { color: "#ff4444", title: "Eliminator - High eliminations" },
+        "GACHA": { color: "#00d4ff", title: "Gacha/Depositor - High deposits" },
+        "WART": { color: "#88aa88", title: "Wart Runner - High wart distance" },
+        "BALANCED": { color: "#888888", title: "Balanced - No strong specialization" },
+        "HYBRID": { color: "#aa88ff", title: "Hybrid - Mixed stats" }
+    };
+
+    const info = roleInfo[role] || { color: "#888888", title: role || "Unknown" };
+    return `<span class="role-badge" style="background: ${info.color}; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;" title="${info.title}">${role}</span>`;
+}
+
+// Format matchup info (best vs or worst vs)
+function formatMatchupInfo(matchup, isBest) {
+    if (!matchup) return '<span style="color:#666;">-</span>';
+
+    const cls = matchup.class;
+    const supp1 = matchup.supp1;
+    const supp2 = matchup.supp2;
+    const wr = matchup.win_rate;
+    const games = matchup.games;
+
+    // For best matchup, we have wins; for worst matchup, we calculate wins from losses
+    const wins = isBest ? matchup.wins : (games - matchup.losses);
+    const record = `${wins}/${games}`;
+
+    // Color based on win rate
+    let wrColor = '#ffcc00';
+    if (wr >= 60) wrColor = '#00ff88';
+    else if (wr < 40) wrColor = '#ff4444';
+
+    // Extract base class for styling (e.g., "Sprinter (Wart)" -> "Sprinter")
+    const baseClass = cls.split(' ')[0];
+
+    return `
+        <div class="matchup-info" title="${cls} + ${supp1} + ${supp2} (${record})">
+            <span class="class-badge class-${baseClass}" style="font-size:10px;padding:1px 4px;">${cls}</span>
+            <span style="font-size:10px;color:#888;">+${supp1}+${supp2}</span>
+            <span style="color:${wrColor};font-weight:bold;font-size:11px;">${wr}%</span>
+            <span style="color:#888;font-size:10px;">(${record})</span>
+        </div>
+    `;
+}
+
+// Initialize the team comps table
+function initTeamCompsTable(data) {
+    const container = document.getElementById('team-comps-table');
+
+    if (data.length === 0) {
+        container.innerHTML = '<div class="no-data">No team compositions found with enough games.</div>';
+        return;
+    }
+
+    teamCompsTable = new Tabulator("#team-comps-table", {
+        data: data,
+        layout: "fitColumns",
+        height: 500,
+
+        columns: [
+            {
+                title: "Class",
+                field: "champion_class",
+                width: 140,
+                headerTooltip: "Champion class (with subtype for Sprinters/Grinders)",
+                formatter: function(cell) {
+                    const cls = cell.getValue();
+                    // Extract base class for styling (e.g., "Sprinter (Wart)" -> "Sprinter")
+                    const baseClass = cls.split(' ')[0];
+                    return `<span class="class-badge class-${baseClass}">${cls}</span>`;
+                }
+            },
+            {
+                title: "Supp 1",
+                field: "supp1",
+                width: 90,
+                hozAlign: "center",
+                headerTooltip: "First supporter role",
+                formatter: function(cell) {
+                    return formatRoleBadge(cell.getValue());
+                }
+            },
+            {
+                title: "Supp 2",
+                field: "supp2",
+                width: 90,
+                hozAlign: "center",
+                headerTooltip: "Second supporter role",
+                formatter: function(cell) {
+                    return formatRoleBadge(cell.getValue());
+                }
+            },
+            {
+                title: "Win Rate",
+                field: "win_rate",
+                width: 95,
+                hozAlign: "center",
+                headerTooltip: "Historical win percentage",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    let cls = 'score-medium';
+                    if (val >= 55) cls = 'score-high';
+                    else if (val < 45) cls = 'score-low';
+                    return `<span class="${cls}">${val.toFixed(1)}%</span>`;
+                },
+                sorter: "number"
+            },
+            {
+                title: "Record",
+                field: "games",
+                width: 100,
+                hozAlign: "center",
+                headerTooltip: "Wins / Total Games",
+                formatter: function(cell) {
+                    const data = cell.getRow().getData();
+                    return `<span style="color:#aaa;">${data.wins}/${data.games}</span>`;
+                }
+            },
+            {
+                title: "Best vs",
+                field: "best_matchup",
+                minWidth: 180,
+                headerTooltip: "Composition this team beats most often",
+                formatter: function(cell) {
+                    return formatMatchupInfo(cell.getValue(), true);
+                }
+            },
+            {
+                title: "Worst vs",
+                field: "worst_matchup",
+                minWidth: 180,
+                headerTooltip: "Composition this team loses to most often",
+                formatter: function(cell) {
+                    return formatMatchupInfo(cell.getValue(), false);
+                }
+            }
+        ],
+
+        initialSort: [
+            { column: "win_rate", dir: "desc" }
+        ]
+    });
+
+    // Set up filters
+    document.getElementById('comp-class-filter').addEventListener('change', applyTeamCompsFilters);
+    document.getElementById('comp-min-games').addEventListener('change', function() {
+        // Reload data with new min_games filter
+        loadTeamCompsData();
+    });
+}
+
+// Apply team comps filters
+function applyTeamCompsFilters() {
+    const classVal = document.getElementById('comp-class-filter').value;
+
+    if (!teamCompsTable) return;
+
+    teamCompsTable.setFilter(function(data) {
+        // Class filter
+        if (classVal && data.champion_class !== classVal) {
+            return false;
+        }
+        return true;
     });
 }

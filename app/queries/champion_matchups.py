@@ -3,7 +3,9 @@
 from typing import Optional
 
 from ..feed import get_feed
-from .scoring import calc_matchup_score, get_edge_label
+from .scoring import calc_matchup_score, get_grade
+from .scoring_v4 import calc_composition_score
+from .composition import detect_team_composition
 from .fantasy import calc_projected_fp
 
 
@@ -17,15 +19,18 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
     if not champ_info:
         return None
 
+    # Get champion's career stats for FP projection
+    champ_stats = store.get_career_stats(token_id)
+
     champion = {
         "token_id": token_id,
         "name": champ_info["name"],
         "class": champ_info["class"],
         "base_win_rate": champ_info["win_pct"],
+        "avg_elims": round(champ_stats["career_elims"], 2),
+        "avg_deps": round(champ_stats["career_deps"], 2),
+        "avg_wart": round(champ_stats["career_wart"], 1),
     }
-
-    # Get champion's career stats for FP projection
-    champ_stats = store.get_career_stats(token_id)
 
     matchups = []
 
@@ -71,8 +76,9 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
         opp_info = store.get_champion_info(opp_champ["token_id"])
         opp_win_rate = opp_info["win_pct"] if opp_info else 50.0
 
-        # Get class matchup
-        my_class = champion["class"]
+        # Get class matchup - use class from match data (not stale aggregate)
+        # Champions can change class, so match player data has the current class
+        my_class = my_champ.get("class", "")
         opp_class = opp_champ.get("class", "")
         class_matchup = store.get_class_matchup(my_class, opp_class)
 
@@ -129,6 +135,7 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
             else 1.5
         )
 
+        # V3.3 score (legacy)
         score = calc_matchup_score(
             champion["base_win_rate"],
             class_matchup,
@@ -137,14 +144,43 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
             opp_avg_elims,
             opp_avg_deps,
             my_class,
+            opp_class,
         )
 
-        # Calculate projected FP for this matchup
+        # V4 composition-based score
+        # Build supporter stats for composition detection
+        my_supp_stats = [
+            {
+                "career_elims": s["career_elims"],
+                "career_deps": s["career_deps"],
+                "career_wart": s["career_wart"],
+            }
+            for s in my_supp_details
+        ]
+        opp_supp_stats = [
+            {
+                "career_elims": s["career_elims"],
+                "career_deps": s["career_deps"],
+                "career_wart": s["career_wart"],
+            }
+            for s in opp_supp_details
+        ]
+
+        score_v4, grade_v4, factors = calc_composition_score(
+            champion_wr=champion["base_win_rate"],
+            class_matchup=class_matchup,
+            my_supporters=my_supp_stats,
+            opp_supporters=opp_supp_stats,
+            my_class=my_class,
+            opp_class=opp_class,
+        )
+
+        # Calculate projected FP for this matchup (using V4 score)
         proj_fp = calc_projected_fp(
             champ_stats["career_elims"],
             champ_stats["career_deps"],
             champ_stats["career_wart"],
-            score,
+            score_v4,
         )
 
         matchups.append(
@@ -159,8 +195,12 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
                 "my_avg_deps": round(my_avg_deps, 2),
                 "opp_avg_elims": round(opp_avg_elims, 2),
                 "opp_avg_deps": round(opp_avg_deps, 2),
-                "score": round(score, 1),
-                "edge": get_edge_label(score),
+                "score": round(score_v4, 1),  # V4 as primary
+                "score_v3": round(score, 1),  # Legacy for reference
+                "grade": grade_v4,  # V4 grade as primary
+                "grade_v3": get_grade(score),  # Legacy grade
+                "my_pattern": factors.get("my_pattern", "BALANCED"),
+                "opp_pattern": factors.get("opp_pattern", "BALANCED"),
                 "proj_fp": proj_fp,
             }
         )

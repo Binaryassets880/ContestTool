@@ -18,7 +18,12 @@
       "Bash(git reset:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate from SQLite to remote GitHub Pages feed\n\n- Add app/feed/ module for fetching remote JSON/GZIP data\n- Add app/queries/ module with feed-backed query implementations\n- Update app/main.py with lifespan management and 503 error handling\n- Add Procfile and runtime.txt for Railway deployment\n- Add httpx dependency for async HTTP client\n- Update CLAUDE.md with new architecture documentation\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git push:*)",
-      "Bash(gunzip:*)"
+      "Bash(gunzip:*)",
+      "Bash(timeout:*)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 5; Invoke-RestMethod -Uri ''http://localhost:8001/api/health'' | ConvertTo-Json\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -command \"Start-Sleep -Seconds 4; Invoke-WebRequest -Uri ''http://localhost:8002/api/composition-table?min_games=50'' -UseBasicParsing | ConvertFrom-Json | Measure-Object | Select-Object -ExpandProperty Count\")",
+      "Bash(powershell -command \"Start-Sleep -Seconds 2; \\(Invoke-WebRequest -Uri ''http://localhost:8002/api/composition-table?min_games=50'' -UseBasicParsing\\).Content.Substring\\(0,200\\)\")"
     ]
   }
 }

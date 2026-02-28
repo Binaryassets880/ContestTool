@@ -16,6 +16,7 @@ A web tool for analyzing Moki champion matchups in the Grand Arena fantasy conte
 ContestTool/
 ├── champions.json         # Champion metadata with traits (local)
 ├── schemes.json           # Scheme card definitions (local)
+├── FANTASY.md             # Fantasy points scoring reference
 ├── requirements.txt       # fastapi, uvicorn, pydantic, httpx
 ├── Procfile               # Railway deployment command
 ├── runtime.txt            # Python version for Railway
@@ -32,13 +33,15 @@ ContestTool/
 │   │   └── exceptions.py  # FeedUnavailableError
 │   ├── queries/           # Feed-backed query implementations
 │   │   ├── __init__.py
-│   │   ├── scoring.py     # calc_matchup_score (same formula)
+│   │   ├── scoring.py     # calc_matchup_score formula
+│   │   ├── fantasy.py     # Fantasy point calculations
 │   │   ├── upcoming.py    # get_upcoming_summary()
 │   │   ├── champion_matchups.py
-│   │   ├── historical.py  # Point-in-time analysis
-│   │   └── schemes.py     # Scheme trait matching
+│   │   ├── historical.py  # Point-in-time analysis with FP
+│   │   ├── schemes.py     # Scheme trait matching
+│   │   └── class_changes.py  # Track champion class changes
 │   └── static/
-│       ├── index.html     # Main SPA with 3 tabs
+│       ├── index.html     # Main SPA with 4 tabs
 │       ├── styles.css     # Dark theme styling
 │       └── app.js         # Tabulator tables + API calls
 ```
@@ -86,7 +89,7 @@ Base URL: `https://flowbot44.github.io/grand-arena-builder-skill/data`
 
 ## Matchup Score (MS) Formula
 
-Located in `app/database.py:calc_matchup_score()`
+Located in `app/queries/scoring.py:calc_matchup_score()`
 
 ```python
 score = base_win_rate  # Champion's historical win %
@@ -106,36 +109,54 @@ if my_class == "Defender" and my_supporter_avg_deps >= 1.5:
 return max(0, min(100, score))
 ```
 
-**MS Interpretation (from backtesting):**
-- MS 80+: ~75% win rate
-- MS 70-79: ~76% win rate
-- MS 60-69: ~69% win rate
-- MS 50-59: ~61% win rate
-- MS 40-49: ~57% win rate
-- MS <40: ~51% win rate
+**MS Interpretation**: Higher MS = better win probability. Actual win rates by MS bucket are displayed dynamically on the Analysis tab based on historical data.
+
+## Fantasy Points (FP) System
+
+Located in `app/queries/fantasy.py`. Only **champions** score fantasy points (not supporters).
+
+**Scoring Formula:**
+| Stat | Points |
+|------|--------|
+| Eliminations | 80 pts each |
+| Deposits | 50 pts each |
+| Wart Distance | 0.5625 pts/unit (45 per 80) |
+| Victory | 300 pts |
+
+**Projected FP** = Career avg stats + (MS/100 × 300 win bonus)
+**Actual FP** = Game stats + 300 if won
+
+See `FANTASY.md` for detailed documentation.
 
 ## API Endpoints
 
 ### GET /api/upcoming
-Returns champions with aggregated MS for scheduled games.
+Returns champions with aggregated MS and projected FP for scheduled games.
+- Includes `avg_proj_fp` and `total_proj_fp` fields
 
 ### GET /api/champions/{token_id}/matchups
-Returns detailed per-game matchup breakdown with supporter info.
+Returns detailed per-game matchup breakdown with supporter info and `proj_fp`.
 
-### GET /api/analysis?limit=2000
-Returns historical games with **point-in-time** MS calculations for backtesting.
+### GET /api/analysis
+Returns historical games with **point-in-time** MS and FP calculations for backtesting.
+- Default limit: 50000 (configurable via `?limit=N`)
 - Uses champion win rate from games BEFORE each match
 - Uses supporter career stats from performances BEFORE each match
 - This prevents lookahead bias in backtesting
 - **Both perspectives**: Each match appears twice (once for each champion's view)
 - Search filter only matches Champion column (to see that champion's matchups)
+- Includes `proj_fp`, `actual_fp`, and `fp_diff` per game
+- Returns `bucket_stats` (win rates by MS range) and `fp_stats` (avg projected/actual FP)
 
 ### GET /api/schemes
 Returns champions with matching scheme traits and MS data.
 
+### GET /api/class-changes
+Returns champions who have changed classes, with old/new class and change date.
+
 ## Scheme Trait Matching
 
-Schemes give bonus points when champions have specific traits. Defined in `SCHEME_TRAITS` dict in database.py.
+Schemes give bonus points when champions have specific traits. Defined in `SCHEME_TRAITS` dict in `app/queries/schemes.py`.
 
 Examples:
 - "Costume Party": Onesie trait or specific head traits
@@ -146,9 +167,13 @@ Examples:
 ## Key Implementation Details
 
 ### Point-in-Time Backtesting
-The analysis tab calculates MS using only data available BEFORE each game was played. This required subqueries to filter by `match_date < ?` for:
-1. Champion win rates
-2. Supporter career eliminations/deposits
+The analysis tab calculates MS and FP using only data available BEFORE each game was played:
+1. Champion win rates (from games before that date)
+2. Supporter career eliminations/deposits (from performances before that date)
+3. Champion career stats for FP projection
+
+### Class Change Tracking
+Class history is tracked from **scored matches only** (not scheduled) to ensure accurate change dates. The `store.py` tracks `class_history` per token_id with `(class, first_seen_date)` tuples.
 
 ### Match ID Structure
 MongoDB ObjectID format: first 8 hex chars = Unix timestamp (when record created).
@@ -158,6 +183,9 @@ Games on same day have sequential IDs - position determines order within day.
 - 9AM UTC (4AM EST)
 - 5PM UTC (12PM EST)
 - 1AM UTC (8PM EST)
+
+### Detail Panel Positioning
+Detail panels are positioned below tables (not inserted into Tabulator's DOM) to avoid clipping issues when tables are filtered.
 
 ## Running the App
 
@@ -180,18 +208,26 @@ uvicorn app.main:app --reload --port 8001
 
 ### Upcoming Tab
 - Table of champions sorted by expected wins
-- Click row to expand matchup details with supporter stats
+- Shows Avg FP and Total FP projections
+- Click row to expand matchup details with supporter stats and per-game FP
 - Filter by class, search by name
+
+### Analysis Tab
+- Historical game results with MS and Fantasy Points
+- Bucket stats showing win rate by MS range
+- Shows Proj FP, Actual FP, and +/- difference for each game
+- Click row to expand supporter details with link to Grand Arena match page
+- Filter by result (W/L), minimum MS, and search by champion name
 
 ### Schemes Tab
 - Filter champions by scheme card compatibility
 - Shows which trait-based schemes each champion qualifies for
 - Click to see upcoming matchups
 
-### Analysis Tab
-- Historical game results with MS
-- Bucket stats showing win rate by MS range
-- Filter by result (W/L) and minimum MS
+### Class Changes Tab
+- Shows champions who have changed classes over time
+- Displays old class, new class, and date of change
+- Useful for tracking meta shifts
 
 ## Hosting Architecture (Implemented)
 GitHub Actions + GitHub Pages + Railway:

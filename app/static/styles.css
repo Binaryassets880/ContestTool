@@ -162,6 +162,31 @@ header h1 {
     font-weight: bold;
 }
 
+/* Letter grade colors - just colored letter, no background */
+.grade-a {
+    color: #00ff88 !important;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.grade-b {
+    color: #88ff88 !important;
+    font-weight: bold;
+}
+
+.grade-c {
+    color: #ffcc00 !important;
+}
+
+.grade-d {
+    color: #ff9900 !important;
+}
+
+.grade-f {
+    color: #ff4444 !important;
+    font-weight: bold;
+}
+
 /* Favorable/Unfavorable count columns */
 .favorable-high {
     color: #00ff88 !important;
@@ -381,25 +406,37 @@ header h1 {
     text-align: center;
 }
 
-.bucket-card.bucket-good {
-    border-color: #00c864;
-    background: rgba(0, 200, 100, 0.1);
+/* Grade-based bucket colors */
+.bucket-card.bucket-grade-a {
+    border-color: #00ff88;
+    background: rgba(0, 255, 136, 0.15);
 }
 
-.bucket-card.bucket-bad {
-    border-color: #ff5050;
-    background: rgba(255, 80, 80, 0.1);
+.bucket-card.bucket-grade-b {
+    border-color: #88ff88;
+    background: rgba(136, 255, 136, 0.12);
 }
 
-.bucket-card.bucket-neutral {
+.bucket-card.bucket-grade-c {
     border-color: #ffcc00;
-    background: rgba(255, 200, 0, 0.1);
+    background: rgba(255, 204, 0, 0.1);
 }
 
-.bucket-range {
-    font-size: 0.9rem;
+.bucket-card.bucket-grade-d {
+    border-color: #ff9900;
+    background: rgba(255, 153, 0, 0.12);
+}
+
+.bucket-card.bucket-grade-f {
+    border-color: #ff4444;
+    background: rgba(255, 68, 68, 0.15);
+}
+
+.bucket-grade {
+    font-size: 1rem;
     color: #aaa;
     margin-bottom: 5px;
+    font-weight: bold;
 }
 
 .bucket-winrate {
@@ -408,22 +445,69 @@ header h1 {
     color: #fff;
 }
 
-.bucket-good .bucket-winrate {
+.bucket-grade-a .bucket-winrate {
     color: #00ff88;
 }
 
-.bucket-bad .bucket-winrate {
-    color: #ff6666;
+.bucket-grade-b .bucket-winrate {
+    color: #88ff88;
 }
 
-.bucket-neutral .bucket-winrate {
+.bucket-grade-c .bucket-winrate {
     color: #ffcc00;
+}
+
+.bucket-grade-d .bucket-winrate {
+    color: #ff9900;
+}
+
+.bucket-grade-f .bucket-winrate {
+    color: #ff4444;
 }
 
 .bucket-sample {
     font-size: 0.8rem;
     color: #888;
     margin-top: 5px;
+}
+
+/* Bucket comparison layout (V3 vs V4) */
+.bucket-comparison {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.bucket-section h4 {
+    margin: 0 0 10px 0;
+    color: #00d4ff;
+    font-size: 0.95rem;
+}
+
+.bucket-section-legacy h4 {
+    color: #888;
+}
+
+.bucket-cards-small {
+    gap: 10px;
+}
+
+.bucket-card-small {
+    padding: 8px 12px;
+    min-width: 80px;
+}
+
+.bucket-card-small .bucket-grade {
+    font-size: 0.9rem;
+    margin-bottom: 3px;
+}
+
+.bucket-card-small .bucket-winrate {
+    font-size: 1.2rem;
+}
+
+.bucket-card-small .bucket-sample {
+    font-size: 0.7rem;
 }
 
 /* Result colors */
@@ -866,4 +950,36 @@ header h1 {
 
 .fp-diff-neg {
     color: #ff6666 !important;
+}
+
+/* FP Projection Breakdown */
+.fp-breakdown {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px 15px;
+    background: #252545;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.fp-breakdown-title {
+    color: #00d4ff;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.fp-stat {
+    font-size: 0.85rem;
+    color: #aaa;
+    background: #1a1a2e;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.fp-stat-total {
+    color: #00d4ff;
+    font-weight: bold;
+    border: 1px solid #00d4ff;
 }

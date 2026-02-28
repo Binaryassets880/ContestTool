@@ -12,9 +12,11 @@ from .feed import FeedCoordinator, FeedUnavailableError
 from .queries import (
     get_champion_matchups,
     get_class_changes,
+    get_composition_table,
     get_historical_analysis,
     get_schemes_data,
     get_upcoming_summary,
+    get_composition_analysis_summary,
 )
 
 # Configure logging
@@ -127,6 +129,34 @@ async def api_class_changes():
         return await get_class_changes()
     except FeedUnavailableError as e:
         logger.error(f"Feed unavailable for /api/class-changes: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
+
+
+@app.get("/api/composition-analysis")
+async def api_composition_analysis():
+    """Get team composition analysis with win rate patterns."""
+    try:
+        return await get_composition_analysis_summary()
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/composition-analysis: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Feed data temporarily unavailable. Please try again later.",
+            headers={"Retry-After": str(e.retry_after)},
+        )
+
+
+@app.get("/api/composition-table")
+async def api_composition_table(min_games: int = 50):
+    """Get team composition statistics table."""
+    try:
+        return await get_composition_table(min_games)
+    except FeedUnavailableError as e:
+        logger.error(f"Feed unavailable for /api/composition-table: {e}")
         raise HTTPException(
             status_code=503,
             detail="Feed data temporarily unavailable. Please try again later.",

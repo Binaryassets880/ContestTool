@@ -2,6 +2,8 @@
 
 from ..feed import get_feed
 from .scoring import calc_matchup_score
+from .scoring_v4 import calc_composition_score, get_grade
+from .composition import detect_team_composition
 from .fantasy import calc_projected_fp, calc_actual_fp
 
 
@@ -11,18 +13,27 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
     Uses POINT-IN-TIME data: for each game, calculates MS using only
     data that was available BEFORE that game was played.
     Returns games and win rate statistics by MS bucket.
+    Includes both V3.3 and V4 (composition) scores for comparison.
     """
     feed = await get_feed()
     store = feed.store
 
     games = []
-    ms_buckets = {
-        "80+": {"wins": 0, "total": 0},
-        "70-79": {"wins": 0, "total": 0},
-        "60-69": {"wins": 0, "total": 0},
-        "50-59": {"wins": 0, "total": 0},
-        "40-49": {"wins": 0, "total": 0},
-        "<40": {"wins": 0, "total": 0},
+    # Grade buckets for V3.3: A (70+), B (60-69), C (50-59), D (40-49), F (<40)
+    grade_buckets = {
+        "A": {"wins": 0, "total": 0},
+        "B": {"wins": 0, "total": 0},
+        "C": {"wins": 0, "total": 0},
+        "D": {"wins": 0, "total": 0},
+        "F": {"wins": 0, "total": 0},
+    }
+    # Grade buckets for V4 (composition-based)
+    grade_buckets_v4 = {
+        "A": {"wins": 0, "total": 0},
+        "B": {"wins": 0, "total": 0},
+        "C": {"wins": 0, "total": 0},
+        "D": {"wins": 0, "total": 0},
+        "F": {"wins": 0, "total": 0},
     }
 
     # FP tracking for summary stats
@@ -108,6 +119,7 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
             opp_class = opp_champ.get("class", "")
             class_matchup = store.get_class_matchup(my_class, opp_class)
 
+            # V3.3 score (legacy)
             score = calc_matchup_score(
                 my_wr,
                 class_matchup,
@@ -116,28 +128,44 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
                 opp_avg_elims,
                 opp_avg_deps,
                 my_class,
+                opp_class,
             )
 
             won = match.team_won == my_team
             score_rounded = round(score, 1)
 
-            # Update buckets (using rounded score to match display)
-            if score_rounded >= 80:
-                bucket = "80+"
-            elif score_rounded >= 70:
-                bucket = "70-79"
-            elif score_rounded >= 60:
-                bucket = "60-69"
-            elif score_rounded >= 50:
-                bucket = "50-59"
-            elif score_rounded >= 40:
-                bucket = "40-49"
-            else:
-                bucket = "<40"
+            # V4 composition-based score
+            score_v4, grade_v4, factors = calc_composition_score(
+                champion_wr=my_wr,
+                class_matchup=class_matchup,
+                my_supporters=my_supp_stats,
+                opp_supporters=opp_supp_stats,
+                my_class=my_class,
+                opp_class=opp_class,
+            )
+            my_pattern = factors.get("my_pattern", "BALANCED")
+            opp_pattern = factors.get("opp_pattern", "BALANCED")
 
-            ms_buckets[bucket]["total"] += 1
+            # Update V3.3 grade buckets
+            if score_rounded >= 70:
+                grade = "A"
+            elif score_rounded >= 60:
+                grade = "B"
+            elif score_rounded >= 50:
+                grade = "C"
+            elif score_rounded >= 40:
+                grade = "D"
+            else:
+                grade = "F"
+
+            grade_buckets[grade]["total"] += 1
             if won:
-                ms_buckets[bucket]["wins"] += 1
+                grade_buckets[grade]["wins"] += 1
+
+            # Update V4 grade buckets
+            grade_buckets_v4[grade_v4]["total"] += 1
+            if won:
+                grade_buckets_v4[grade_v4]["wins"] += 1
 
             # Get champion's point-in-time career stats for FP projection
             champ_pit_stats = store.get_career_stats_before_date(my_token, match_date)
@@ -200,7 +228,12 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
                     "champion_class": my_class,
                     "opponent": opp_champ.get("name", ""),
                     "opponent_class": opp_class,
-                    "matchup_score": score_rounded,
+                    "matchup_score": score_rounded,  # V3.3 score
+                    "matchup_score_v4": score_v4,  # V4 composition score
+                    "grade": grade,  # V3.3 grade
+                    "grade_v4": grade_v4,  # V4 grade
+                    "my_pattern": my_pattern,  # Team composition pattern
+                    "opp_pattern": opp_pattern,  # Opponent composition pattern
                     "result": "W" if won else "L",
                     "win_type": match.win_type,
                     "my_supporters": my_supporters_info,
@@ -211,10 +244,10 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
                 }
             )
 
-    # Calculate bucket stats
+    # Calculate bucket stats by grade (V3.3)
     bucket_stats = []
-    for bucket_name in ["80+", "70-79", "60-69", "50-59", "40-49", "<40"]:
-        bucket = ms_buckets[bucket_name]
+    for grade_name in ["A", "B", "C", "D", "F"]:
+        bucket = grade_buckets[grade_name]
         win_rate = (
             round(100 * bucket["wins"] / bucket["total"], 1)
             if bucket["total"] > 0
@@ -222,7 +255,25 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
         )
         bucket_stats.append(
             {
-                "range": bucket_name,
+                "grade": grade_name,
+                "games": bucket["total"],
+                "wins": bucket["wins"],
+                "win_rate": win_rate,
+            }
+        )
+
+    # Calculate bucket stats by grade (V4 composition-based)
+    bucket_stats_v4 = []
+    for grade_name in ["A", "B", "C", "D", "F"]:
+        bucket = grade_buckets_v4[grade_name]
+        win_rate = (
+            round(100 * bucket["wins"] / bucket["total"], 1)
+            if bucket["total"] > 0
+            else 0
+        )
+        bucket_stats_v4.append(
+            {
+                "grade": grade_name,
                 "games": bucket["total"],
                 "wins": bucket["wins"],
                 "win_rate": win_rate,
@@ -244,4 +295,9 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
         "total_games": fp_totals["count"],
     }
 
-    return {"games": games, "bucket_stats": bucket_stats, "fp_stats": fp_stats}
+    return {
+        "games": games,
+        "bucket_stats": bucket_stats,  # V3.3 stats
+        "bucket_stats_v4": bucket_stats_v4,  # V4 composition stats
+        "fp_stats": fp_stats,
+    }
