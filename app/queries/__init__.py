@@ -14,6 +14,19 @@ from .composition_analysis import (
 )
 from .class_changes import get_class_changes
 from .composition_table import get_composition_table
+from .blocks import (
+    get_utc_today,
+    get_current_block,
+    assign_blocks_to_matches,
+    assign_blocks_to_all_matches,
+    get_block_label,
+    is_new_format_match,
+    is_new_format_date,
+    extract_timestamp_from_match_id,
+    CONTEST_BLOCKS,
+    NEW_FORMAT_START_DATE,
+    NEW_FORMAT_START_TIMESTAMP,
+)
 from .fantasy import (
     calc_projected_fp,
     calc_actual_fp,
@@ -48,4 +61,15 @@ __all__ = [
     "FP_DEP",
     "FP_WART",
     "FP_WIN",
+    "get_utc_today",
+    "get_current_block",
+    "assign_blocks_to_matches",
+    "assign_blocks_to_all_matches",
+    "get_block_label",
+    "is_new_format_match",
+    "is_new_format_date",
+    "extract_timestamp_from_match_id",
+    "CONTEST_BLOCKS",
+    "NEW_FORMAT_START_DATE",
+    "NEW_FORMAT_START_TIMESTAMP",
 ]

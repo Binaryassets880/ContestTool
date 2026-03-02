@@ -254,6 +254,20 @@ header h1 {
 .class-Support { background: #65a30d; }
 .class-Anchor { background: #6366f1; }
 
+/* Block badges */
+.block-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #fff;
+}
+
+.block-1 { background: #6366f1; }  /* Purple - 1 AM UTC (night) */
+.block-2 { background: #f59e0b; }  /* Orange - 9 AM UTC (morning) */
+.block-3 { background: #10b981; }  /* Green - 5 PM UTC (afternoon) */
+
 /* Loading state */
 .loading {
     text-align: center;
@@ -343,6 +357,26 @@ header h1 {
 
 .supp-stats span {
     cursor: help;
+}
+
+/* Supporter win rate */
+.supp-wr {
+    font-size: 0.75rem;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    cursor: help;
+}
+
+.supp-wr.wr-high {
+    color: #00ff88;
+    font-weight: bold;
+    background: rgba(0, 255, 136, 0.15);
+}
+
+.supp-wr.wr-low {
+    color: #ff6666;
+    background: rgba(255, 102, 102, 0.15);
 }
 
 /* Score legend */

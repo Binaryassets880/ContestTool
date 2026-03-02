@@ -205,6 +205,7 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
                         "career_elims": round(stats.get("career_elims", 1.0), 2),
                         "career_deps": round(stats.get("career_deps", 1.5), 2),
                         "career_wart": round(stats.get("career_wart", 0), 1),
+                        "win_rate": store.get_moki_winrate_before_date(s.get("token_id"), match_date),
                     })
 
             opp_supporters_info = []
@@ -218,6 +219,7 @@ async def get_historical_analysis(limit: int = 50000) -> dict:
                         "career_elims": round(stats.get("career_elims", 1.0), 2),
                         "career_deps": round(stats.get("career_deps", 1.5), 2),
                         "career_wart": round(stats.get("career_wart", 0), 1),
+                        "win_rate": store.get_moki_winrate_before_date(s.get("token_id"), match_date),
                     })
 
             games.append(

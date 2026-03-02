@@ -7,12 +7,24 @@ from .scoring import calc_matchup_score, get_grade
 from .scoring_v4 import calc_composition_score
 from .composition import detect_team_composition
 from .fantasy import calc_projected_fp
+from .blocks import get_utc_today, get_current_block, assign_blocks_to_all_matches, get_block_label
 
 
-async def get_champion_matchups(token_id: int) -> Optional[dict]:
-    """Get detailed matchup breakdown for a specific champion."""
+async def get_champion_matchups(token_id: int, block_filter: int = None) -> Optional[dict]:
+    """Get detailed matchup breakdown for a specific champion.
+
+    Args:
+        token_id: Champion's token ID.
+        block_filter: Optional block number (1, 2, or 3) to filter matchups.
+    """
     feed = await get_feed()
     store = feed.store
+
+    # Get today's date for filtering
+    today = get_utc_today()
+    # Build block assignments for ALL scheduled matches (across all dates)
+    block_assignments = assign_blocks_to_all_matches(store)
+    current_block = get_current_block()
 
     # Get champion info
     champ_info = store.get_champion_info(token_id)
@@ -34,10 +46,18 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
 
     matchups = []
 
-    # Find all scheduled matches for this champion
+    # Find all scheduled matches for this champion (today and future only)
     for match_id in store.matches_by_token.get(token_id, []):
         match = store.matches.get(match_id)
         if not match or match.state != "scheduled":
+            continue
+        # Filter out past games
+        if match.match_date < today:
+            continue
+
+        # Filter by block if specified
+        block = block_assignments.get(match_id, 0)
+        if block_filter and block != block_filter:
             continue
 
         # Find champion's team and opponent
@@ -95,6 +115,7 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
                         "career_elims": round(stats["career_elims"], 2),
                         "career_deps": round(stats["career_deps"], 2),
                         "career_wart": round(stats["career_wart"], 2),
+                        "win_rate": store.get_moki_winrate(s["token_id"]),
                     }
                 )
 
@@ -110,6 +131,7 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
                         "career_elims": round(stats["career_elims"], 2),
                         "career_deps": round(stats["career_deps"], 2),
                         "career_wart": round(stats["career_wart"], 2),
+                        "win_rate": store.get_moki_winrate(s["token_id"]),
                     }
                 )
 
@@ -183,9 +205,15 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
             score_v4,
         )
 
+        # Get block label (block already computed above)
+        block_label = get_block_label(block) if block else ""
+
         matchups.append(
             {
+                "match_id": match_id,
                 "date": match.match_date,
+                "block": block,
+                "block_label": block_label,
                 "opponent": opp_champ.get("name", ""),
                 "opponent_class": opp_class,
                 "opponent_win_rate": opp_win_rate,
@@ -205,7 +233,12 @@ async def get_champion_matchups(token_id: int) -> Optional[dict]:
             }
         )
 
-    # Sort by date
-    matchups.sort(key=lambda m: m["date"])
+    # Sort by date, then by block
+    matchups.sort(key=lambda m: (m["date"], m.get("block", 0)))
 
-    return {"champion": champion, "matchups": matchups}
+    return {
+        "champion": champion,
+        "matchups": matchups,
+        "current_block": current_block,
+        "today": today,
+    }

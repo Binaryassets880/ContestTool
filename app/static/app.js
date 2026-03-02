@@ -8,6 +8,7 @@ let teamCompsTable = null;
 let selectedTokenId = null;
 let selectedSchemeTokenId = null;
 let upcomingFiltersInitialized = false;
+let selectedBlock = null;  // Track selected block filter for API calls
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -124,16 +125,32 @@ function cleanupDetailPanels() {
 }
 
 // Load upcoming matchups data
-async function loadUpcomingData() {
+async function loadUpcomingData(block = null) {
     const container = document.getElementById('upcoming-table');
-    container.innerHTML = '<div class="loading">Loading matchup data...</div>';
+
+    // Only show loading message on first load (don't destroy existing table)
+    if (!upcomingTable) {
+        container.innerHTML = '<div class="loading">Loading matchup data...</div>';
+    }
 
     try {
-        const response = await fetch('/api/upcoming');
+        const url = block !== null ? `/api/upcoming?block=${block}` : '/api/upcoming';
+        const response = await fetch(url);
         const data = await response.json();
-        initUpcomingTable(data);
+
+        if (upcomingTable) {
+            // Table exists - just update data
+            upcomingTable.setData(data);
+        } else {
+            // First load - initialize table
+            initUpcomingTable(data);
+        }
     } catch (error) {
-        container.innerHTML = `<div class="loading">Error loading data: ${error.message}</div>`;
+        if (!upcomingTable) {
+            container.innerHTML = `<div class="loading">Error loading data: ${error.message}</div>`;
+        } else {
+            console.error('Error reloading data:', error);
+        }
     }
 }
 
@@ -312,54 +329,57 @@ function initUpcomingFilters() {
 
     // Search filter
     document.getElementById('search').addEventListener('input', function() {
-        if (!upcomingTable) return;
-
-        // Close any open detail panel before filtering
-        if (selectedTokenId !== null) {
-            hideDetailPanel();
-            selectedTokenId = null;
-            upcomingTable.deselectRow();
-        }
-
-        const val = this.value.toLowerCase();
-        const classVal = document.getElementById('class-filter').value;
-
-        // Clear and reapply all filters
-        upcomingTable.clearFilter();
-        if (val) {
-            upcomingTable.addFilter(function(data) {
-                return data.name.toLowerCase().includes(val);
-            });
-        }
-        if (classVal) {
-            upcomingTable.addFilter("class", "=", classVal);
-        }
+        applyUpcomingFilters();
     });
 
     // Class filter
     document.getElementById('class-filter').addEventListener('change', function() {
-        if (!upcomingTable) return;
+        applyUpcomingFilters();
+    });
 
-        // Close any open detail panel before filtering
-        if (selectedTokenId !== null) {
-            hideDetailPanel();
-            selectedTokenId = null;
-            upcomingTable.deselectRow();
+    // Block filter
+    document.getElementById('block-filter').addEventListener('change', function() {
+        applyUpcomingFilters();
+    });
+}
+
+// Apply all upcoming table filters
+async function applyUpcomingFilters() {
+    if (!upcomingTable) return;
+
+    // Close any open detail panel before filtering
+    if (selectedTokenId !== null) {
+        hideDetailPanel();
+        selectedTokenId = null;
+        upcomingTable.deselectRow();
+    }
+
+    const searchVal = document.getElementById('search').value.toLowerCase();
+    const classVal = document.getElementById('class-filter').value;
+    const blockVal = document.getElementById('block-filter').value;
+
+    // If block filter changed, reload data from backend with recalculated stats
+    const newBlock = blockVal ? parseInt(blockVal) : null;
+    if (newBlock !== selectedBlock) {
+        selectedBlock = newBlock;
+        await loadUpcomingData(newBlock);
+    }
+
+    // Apply client-side filters (search and class)
+    upcomingTable.clearFilter();
+
+    upcomingTable.setFilter(function(data) {
+        // Search filter
+        if (searchVal && !data.name.toLowerCase().includes(searchVal)) {
+            return false;
         }
 
-        const val = this.value;
-        const searchVal = document.getElementById('search').value.toLowerCase();
+        // Class filter
+        if (classVal && data.class !== classVal) {
+            return false;
+        }
 
-        // Clear and reapply all filters
-        upcomingTable.clearFilter();
-        if (val) {
-            upcomingTable.addFilter("class", "=", val);
-        }
-        if (searchVal) {
-            upcomingTable.addFilter(function(data) {
-                return data.name.toLowerCase().includes(searchVal);
-            });
-        }
+        return true;
     });
 }
 
@@ -375,20 +395,30 @@ function hideDetailPanel() {
     }
 }
 
-// Show matchup detail for a champion - inline under the clicked row
+// Show matchup detail for a champion - below the table
 async function showMatchupDetail(tokenId, rowElement) {
     const panel = document.getElementById('detail-panel');
+    const container = document.getElementById('table-wrapper');
+
+    // Always append panel to container (not inside Tabulator's DOM)
+    // This avoids issues when rows are filtered/re-rendered
+    if (panel.parentNode !== container) {
+        container.appendChild(panel);
+    }
+
     panel.classList.remove('hidden');
     panel.innerHTML = '<div class="loading">Loading matchup details...</div>';
 
-    // Insert the panel directly after the clicked row in the table
-    // This makes it appear inline, expanding under the selected champion
-    if (rowElement && rowElement.parentNode) {
-        rowElement.parentNode.insertBefore(panel, rowElement.nextSibling);
-    }
+    // Scroll the panel into view
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
-        const response = await fetch(`/api/champions/${tokenId}/matchups`);
+        // Pass block filter to API if one is selected
+        let url = `/api/champions/${tokenId}/matchups`;
+        if (selectedBlock) {
+            url += `?block=${selectedBlock}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
 
         if (!response.ok) {
@@ -437,13 +467,24 @@ function formatSupporter(s) {
     const careerElims = s.career_elims ?? 0;
     const careerDeps = s.career_deps ?? 0;
     const careerWart = s.career_wart ?? 0;
+    const winRate = s.win_rate ?? null;
     const suppClass = s.class || 'Unknown';
 
     const elimClass = careerElims >= 2.0 ? 'high-elims' : (careerElims < 1.0 ? 'low-elims' : '');
 
+    // Win rate display with color coding
+    let wrDisplay = '';
+    if (winRate !== null) {
+        let wrClass = 'supp-wr';
+        if (winRate >= 55) wrClass += ' wr-high';
+        else if (winRate < 45) wrClass += ' wr-low';
+        wrDisplay = `<span class="${wrClass}" title="Career Win Rate">${winRate.toFixed(1)}%</span>`;
+    }
+
     return `
         <div class="supporter-card">
             <span class="supp-name">${displayName}</span>
+            ${wrDisplay}
             <span class="class-badge class-${suppClass}">${suppClass}</span>
             <span class="supp-stats">
                 <span class="${elimClass}" title="Career Avg Eliminations">${careerElims.toFixed(1)}e</span>
@@ -502,6 +543,20 @@ function renderMatchupDetail(container, data) {
                 field: "date",
                 width: 95,
                 headerTooltip: "Match date"
+            },
+            {
+                title: "Block",
+                field: "block",
+                width: 55,
+                hozAlign: "center",
+                headerTooltip: "Contest block (8PM, 4AM, 12PM EST)",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    if (!val) return '-';
+                    const labels = {1: '8PM', 2: '4AM', 3: '12PM'};
+                    const label = labels[val] || `Block ${val}`;
+                    return `<span class="block-badge block-${val}" title="Block ${val}">${label}</span>`;
+                }
             },
             {
                 title: "Opponent",
@@ -1177,6 +1232,19 @@ function renderSchemeMatchupDetail(container, data) {
 
         columns: [
             { title: "Date", field: "date", width: 95 },
+            {
+                title: "Block",
+                field: "block",
+                width: 55,
+                hozAlign: "center",
+                formatter: function(cell) {
+                    const val = cell.getValue();
+                    if (!val) return '-';
+                    const labels = {1: '8PM', 2: '4AM', 3: '12PM'};
+                    const label = labels[val] || `Block ${val}`;
+                    return `<span class="block-badge block-${val}" title="Block ${val}">${label}</span>`;
+                }
+            },
             { title: "Opponent", field: "opponent", minWidth: 120 },
             {
                 title: "Class",
@@ -1217,7 +1285,7 @@ function renderSchemeMatchupDetail(container, data) {
             }
         ],
 
-        initialSort: [{ column: "score", dir: "desc" }]
+        initialSort: [{ column: "date", dir: "asc" }]
     });
 }
 

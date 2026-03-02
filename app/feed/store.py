@@ -285,6 +285,42 @@ class FeedDataStore:
 
         return round(100 * wins / games, 1) if games > 0 else 50.0
 
+    def get_moki_winrate(self, token_id: int) -> float:
+        """Get career win rate for any moki (champion or supporter).
+
+        Uses cumulative stats from the feed.
+        """
+        stats = self.cumulative_stats.get(token_id, {})
+        games = stats.get("games_played", 0)
+        wins = stats.get("wins", 0)
+        if games < 5:  # Minimum games threshold
+            return 50.0
+        return round(100 * wins / games, 1)
+
+    def get_moki_winrate_before_date(self, token_id: int, before_date: str) -> float:
+        """Get win rate for any moki using only matches before a specific date.
+
+        Required for point-in-time historical analysis of supporters.
+        """
+        wins, games = 0, 0
+
+        for match_id in self.matches_by_token.get(token_id, []):
+            match = self.matches.get(match_id)
+            if not match or match.state != "scored" or match.match_date >= before_date:
+                continue
+
+            # Find which team this moki was on
+            for player in match.players:
+                if player.get("token_id") == token_id:
+                    games += 1
+                    if match.team_won == player.get("team"):
+                        wins += 1
+                    break
+
+        if games < 5:  # Minimum games threshold
+            return 50.0
+        return round(100 * wins / games, 1)
+
     def get_class_matchup(self, my_class: str, opp_class: str) -> float:
         """Get class matchup win rate."""
         return self.class_matchup_winrates.get((my_class, opp_class), 50.0)
@@ -326,3 +362,25 @@ class FeedDataStore:
 
         # Sort by change date descending (most recent first)
         return sorted(changes, key=lambda x: x["change_date"], reverse=True)
+
+    def get_active_scheduled_matches(self, min_date: str) -> list[str]:
+        """Get scheduled matches on or after the given date.
+
+        Filters out stale games from past dates.
+        """
+        return [
+            match_id
+            for match_id in self.scheduled_matches
+            if self.matches.get(match_id)
+            and self.matches[match_id].match_date >= min_date
+        ]
+
+    def get_scheduled_matches_by_date(self, target_date: str) -> list[str]:
+        """Get scheduled matches for a specific date, sorted by match_id."""
+        matches = [
+            match_id
+            for match_id in self.scheduled_matches
+            if self.matches.get(match_id)
+            and self.matches[match_id].match_date == target_date
+        ]
+        return sorted(matches)  # Sort by match_id for block assignment

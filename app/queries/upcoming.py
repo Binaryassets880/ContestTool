@@ -1,28 +1,48 @@
 """Get upcoming matches summary - reimplemented for feed data store."""
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from ..feed import get_feed
 from .scoring import calc_matchup_score, get_grade
 from .scoring_v4 import calc_composition_score
 from .composition import detect_team_composition
 from .fantasy import calc_projected_fp
+from .blocks import get_utc_today, get_current_block, assign_blocks_to_all_matches
 
 
-async def get_upcoming_summary() -> list[dict]:
-    """Get all champions with their aggregated matchup scores for upcoming games."""
+async def get_upcoming_summary(block_filter: int = None) -> list[dict]:
+    """Get all champions with their aggregated matchup scores for upcoming games.
+
+    Args:
+        block_filter: Optional block number (1, 2, or 3) to filter stats to only that block.
+    """
     feed = await get_feed()
     store = feed.store
+
+    # Filter to active games only (today and future)
+    today = get_utc_today()
+    active_matches = store.get_active_scheduled_matches(today)
+
+    # Build block assignments for ALL scheduled matches (across all dates)
+    block_assignments = assign_blocks_to_all_matches(store)
+    current_block = get_current_block()
 
     champ_scores: dict[int, list[float]] = defaultdict(list)
     champ_scores_v4: dict[int, list[float]] = defaultdict(list)  # V4 composition scores
     champ_patterns: dict[int, list[str]] = defaultdict(list)  # Team patterns
     champ_fp: dict[int, list[float]] = defaultdict(list)  # FP projections per game
+    champ_blocks: dict[int, list[int]] = defaultdict(list)  # Block numbers per game
     champ_info: dict[int, dict] = {}
+    champ_latest_match: dict[int, str] = {}  # Track latest match_id for class display
 
-    for match_id in store.scheduled_matches:
+    for match_id in active_matches:
         match = store.matches.get(match_id)
         if not match:
+            continue
+
+        # Get block for this match and filter if needed
+        block = block_assignments.get(match_id, 0)
+        if block_filter and block != block_filter:
             continue
 
         # Get champions and supporters for each team
@@ -126,13 +146,18 @@ async def get_upcoming_summary() -> list[dict]:
             )
             champ_fp[token_id].append(proj_fp)
 
-            if token_id not in champ_info:
+            # Track block for this game (already computed above)
+            champ_blocks[token_id].append(block)
+
+            # Update champ_info with latest match's class (higher match_id = newer)
+            if token_id not in champ_info or match_id > champ_latest_match.get(token_id, ""):
                 champ_info[token_id] = {
                     "token_id": token_id,
                     "name": my_champ.get("name", ""),
                     "class": my_class,
                     "base_win_rate": base_wr,
                 }
+                champ_latest_match[token_id] = match_id
 
     # Build final results
     results = []
@@ -162,9 +187,17 @@ async def get_upcoming_summary() -> list[dict]:
         avg_score_v3 = sum(scores) / len(scores) if scores else 50
 
         # Find most common pattern
-        from collections import Counter
         pattern_counts = Counter(patterns)
         most_common_pattern = pattern_counts.most_common(1)[0][0] if patterns else "BALANCED"
+
+        # Count games by block
+        blocks = champ_blocks.get(token_id, [])
+        block_counts = Counter(blocks)
+        games_by_block = {
+            "1": block_counts.get(1, 0),
+            "2": block_counts.get(2, 0),
+            "3": block_counts.get(3, 0),
+        }
 
         results.append(
             {
@@ -184,6 +217,8 @@ async def get_upcoming_summary() -> list[dict]:
                 "total_proj_fp": round(total_fp, 1),
                 "team_pattern": most_common_pattern,  # Most common composition pattern
                 "patterns": dict(pattern_counts),  # All patterns with counts
+                "games_by_block": games_by_block,
+                "current_block": current_block,
             }
         )
 

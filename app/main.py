@@ -4,7 +4,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -64,10 +66,15 @@ async def health():
 
 
 @app.get("/api/upcoming")
-async def api_upcoming():
-    """Get all champions with their aggregated matchup scores for upcoming games."""
+async def api_upcoming(block: Optional[int] = Query(None, ge=1, le=3)):
+    """Get all champions with their aggregated matchup scores for upcoming games.
+
+    Args:
+        block: Optional block filter (1=8PM, 2=4AM, 3=12PM). When set, stats are
+               calculated using only games in that block.
+    """
     try:
-        return await get_upcoming_summary()
+        return await get_upcoming_summary(block_filter=block)
     except FeedUnavailableError as e:
         logger.error(f"Feed unavailable for /api/upcoming: {e}")
         raise HTTPException(
@@ -78,10 +85,16 @@ async def api_upcoming():
 
 
 @app.get("/api/champions/{token_id}/matchups")
-async def api_champion_matchups(token_id: int):
-    """Get detailed matchup breakdown for a specific champion."""
+async def api_champion_matchups(token_id: int, block: Optional[int] = Query(None, ge=1, le=3)):
+    """Get detailed matchup breakdown for a specific champion.
+
+    Args:
+        token_id: Champion's token ID.
+        block: Optional block filter (1=8PM, 2=4AM, 3=12PM). When set, only returns
+               matchups in that block.
+    """
     try:
-        result = await get_champion_matchups(token_id)
+        result = await get_champion_matchups(token_id, block_filter=block)
         if result is None:
             raise HTTPException(status_code=404, detail="Champion not found")
         return result

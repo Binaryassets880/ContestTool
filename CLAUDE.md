@@ -184,8 +184,25 @@ Games on same day have sequential IDs - position determines order within day.
 - 5PM UTC (12PM EST)
 - 1AM UTC (8PM EST)
 
-### Detail Panel Positioning
-Detail panels are positioned below tables (not inserted into Tabulator's DOM) to avoid clipping issues when tables are filtered.
+### Tabulator.js DOM Pattern (IMPORTANT)
+**Never insert DOM elements directly into Tabulator's row structure.** Tabulator manages its own virtual DOM and re-renders rows when:
+- Filtering/searching
+- Sorting
+- Scrolling (if using virtual DOM mode)
+
+**Problem:** If you insert a detail panel using `rowElement.parentNode.insertBefore()`, it works initially but breaks silently when the user filters/searches because Tabulator re-renders its rows and your inserted element is lost.
+
+**Solution:** Always append detail panels to a container **outside** Tabulator's DOM:
+```javascript
+// WRONG - breaks when filtering
+rowElement.parentNode.insertBefore(panel, rowElement.nextSibling);
+
+// CORRECT - survives filtering
+const container = document.getElementById('table-wrapper');
+container.appendChild(panel);
+```
+
+This is why `showMatchupDetail()` in app.js appends the panel to `table-wrapper` rather than inserting it into the table.
 
 ## Running the App
 
