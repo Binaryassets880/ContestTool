@@ -333,6 +333,7 @@ class FeedDataStore:
         """Detect all Mokis that have changed class.
 
         Returns a list of class change events, sorted by change date descending.
+        Only reports ONE change per date transition (not per-game).
         """
         changes = []
         for token_id, history in self.class_history.items():
@@ -342,10 +343,22 @@ class FeedDataStore:
             # Sort by date
             sorted_history = sorted(history, key=lambda x: x[0])
 
-            # Find changes
-            for i in range(1, len(sorted_history)):
-                prev_date, prev_class = sorted_history[i - 1]
-                curr_date, curr_class = sorted_history[i]
+            # Deduplicate: keep only the LAST class seen on each date
+            # This prevents false changes from multiple games on same day
+            date_to_class: dict[str, str] = {}
+            for match_date, player_class in sorted_history:
+                date_to_class[match_date] = player_class  # Last one wins
+
+            # Convert back to sorted list of (date, class) tuples
+            deduplicated = sorted(date_to_class.items(), key=lambda x: x[0])
+
+            if len(deduplicated) < 2:
+                continue
+
+            # Find changes between consecutive DATES (not games)
+            for i in range(1, len(deduplicated)):
+                prev_date, prev_class = deduplicated[i - 1]
+                curr_date, curr_class = deduplicated[i]
 
                 if prev_class != curr_class and prev_class and curr_class:
                     champ_info = self.champion_winrates.get(token_id, {})

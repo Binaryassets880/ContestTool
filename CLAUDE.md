@@ -184,6 +184,34 @@ Games on same day have sequential IDs - position determines order within day.
 - 5PM UTC (12PM EST)
 - 1AM UTC (8PM EST)
 
+### Block Assignment System (CRITICAL - DO NOT MODIFY WITHOUT EXPLICIT REQUEST)
+
+Block assignment determines which 10-game chunk a match belongs to (8PM, 4AM, or 12PM).
+
+**Key Rules:**
+1. **Match ID = Play Order**: Games are played in match_id (MongoDB ObjectID) order. The match_id encodes creation timestamp, and games with sequential IDs play in that sequence.
+
+2. **Per-Champion Cycling**: Each champion's matches cycle through blocks independently:
+   - Positions 0-9: 8PM block
+   - Positions 10-19: 4AM block
+   - Positions 20-29: 12PM block
+   - Positions 30+: Cycle repeats
+
+3. **Include ALL Matches for Position**: Position must be calculated from BOTH scheduled AND scored matches. If you only count scheduled matches, positions shift as games complete (e.g., 12PM games become 4AM).
+
+4. **Dual Filter Required**: Matches must pass BOTH filters:
+   - `is_new_format_date(match.match_date)` - scheduled for March 2, 2026+
+   - `is_new_format_match(match_id)` - created after Feb 28, 2026 (excludes Feb 19 batch)
+
+5. **Sort by match_id Within Blocks**: When displaying matchups, sort by `(date, block, match_id)` to show games in play order.
+
+**Why Both Filters?**
+- Feb 19 batch: Created Feb 19, scheduled for March 2 → passes date filter but NOT match_id filter
+- Feb 28 batch: Created Feb 28, scheduled for March 2+ → passes BOTH filters
+- Only Feb 28+ games should be counted for block positions
+
+**Implementation**: See `app/queries/blocks.py:assign_blocks_to_all_matches()`
+
 ### Tabulator.js DOM Pattern (IMPORTANT)
 **Never insert DOM elements directly into Tabulator's row structure.** Tabulator manages its own virtual DOM and re-renders rows when:
 - Filtering/searching

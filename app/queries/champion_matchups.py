@@ -233,8 +233,8 @@ async def get_champion_matchups(token_id: int, block_filter: int = None) -> Opti
             }
         )
 
-    # Sort by date, then by block
-    matchups.sort(key=lambda m: (m["date"], m.get("block", 0)))
+    # Sort by date, then by block, then by match_id (play order)
+    matchups.sort(key=lambda m: (m["date"], m.get("block", 0), m.get("match_id", "")))
 
     return {
         "champion": champion,

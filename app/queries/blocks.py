@@ -1,4 +1,43 @@
-"""Contest block utilities for grouping scheduled games."""
+"""Contest block utilities for grouping scheduled games.
+
+=== BLOCK ASSIGNMENT SYSTEM - DO NOT MODIFY WITHOUT EXPLICIT REQUEST ===
+
+This module handles assigning games to contest time blocks (8PM, 4AM, 12PM).
+The logic is carefully calibrated and MUST follow these rules:
+
+1. MATCH_ID = PLAY ORDER
+   Games are played in match_id order. The match_id is a MongoDB ObjectID where
+   the first 8 hex chars encode the creation timestamp. Sequential IDs = sequential play.
+
+2. PER-CHAMPION POSITION CYCLING
+   Each champion's games are assigned blocks based on their position in that
+   champion's sorted match list:
+   - Positions 0-9:   8PM block
+   - Positions 10-19: 4AM block
+   - Positions 20-29: 12PM block
+   - Positions 30+:   Cycle repeats (30-39 = 8PM, etc.)
+
+3. INCLUDE ALL MATCHES (SCHEDULED + SCORED) FOR POSITION CALCULATION
+   If you only count scheduled matches, positions SHIFT as games complete:
+   - Before: 30 scheduled games → Chef Maki at position 20 (12PM) ✓
+   - After 10 scored: 20 scheduled → Chef Maki at position 10 (4AM) ✗
+   By including scored games, positions stay stable.
+
+4. DUAL FILTER REQUIRED
+   Matches must pass BOTH filters to be counted:
+   - is_new_format_date(match.match_date): Scheduled for March 2, 2026+
+   - is_new_format_match(match_id): Created after Feb 28, 2026
+
+   WHY BOTH? There's a "Feb 19 batch" of games created on Feb 19 but scheduled
+   for March 2. These were created before the new block system and must be
+   EXCLUDED from block assignment. The match_id timestamp filter catches these.
+
+5. SORT BY MATCH_ID WITHIN BLOCKS
+   When displaying matchups, sort by (date, block, match_id) to show correct
+   play order within each block.
+
+See CLAUDE.md for additional documentation.
+"""
 
 from datetime import datetime, timezone
 from collections import defaultdict
@@ -14,8 +53,9 @@ CONTEST_BLOCKS = {
 NEW_FORMAT_START_DATE = "2026-03-02"
 
 # Timestamp cutoff for NEW FORMAT games - games created after this are new format
-# Based on data analysis: old format games have timestamp ~1771498072 (Feb 19-20)
-# New format games have timestamp >= 1772337790 (March 1, 2026 ~4 AM UTC)
+# The "Feb 19 batch" has timestamps ~1771498072 (Feb 19-20) - these are EXCLUDED
+# New format games have timestamp >= 1772337790 (Feb 28, 2026 ~11 PM UTC)
+# This filter is REQUIRED to exclude Feb 19 batch from block calculations
 NEW_FORMAT_START_TIMESTAMP = 1772337790
 
 
@@ -98,21 +138,45 @@ def assign_blocks_to_matches(match_ids: list[str]) -> dict[str, int]:
 def assign_blocks_to_all_matches(store) -> dict[str, int]:
     """Assign block numbers to all scheduled matches across all dates.
 
+    === DO NOT MODIFY WITHOUT EXPLICIT REQUEST - SEE MODULE DOCSTRING ===
+
     Blocks are assigned PER CHAMPION, not globally:
-    - Each champion's matches are sorted by match_id
+    - Each champion's matches are sorted by match_id (= play order)
     - Games 0-9: 8PM, 10-19: 4AM, 20-29: 12PM (cycling every 30)
 
-    Only includes new format matches (timestamp >= NEW_FORMAT_START_TIMESTAMP).
+    CRITICAL IMPLEMENTATION DETAILS:
+
+    1. Position uses ALL matches (scheduled + scored) so blocks don't shift
+       as games complete. Without this, a 12PM game becomes 4AM after the
+       8PM block finishes.
+
+    2. DUAL FILTER REQUIRED - matches must pass BOTH:
+       - is_new_format_date(): match scheduled for March 2+
+       - is_new_format_match(): match CREATED after Feb 28
+       This excludes the "Feb 19 batch" (created Feb 19, scheduled March 2).
+
+    Returns:
+        dict mapping match_id -> block number (1=8PM, 2=4AM, 3=12PM)
+        Only includes scheduled matches (not scored).
     """
-    # Build per-champion match lists (only new format matches)
+    # Build per-champion match lists (ALL matches, not just scheduled)
+    # This ensures block positions don't shift as games are completed
     matches_by_champion: dict[int, list[str]] = defaultdict(list)
 
-    for match_id in store.scheduled_matches:
+    # Include both scheduled and scored matches for position calculation
+    all_match_ids = store.scheduled_matches + store.scored_matches
+
+    for match_id in all_match_ids:
         match = store.matches.get(match_id)
         if not match:
             continue
 
-        # Only new format matches get blocks (timestamp check)
+        # Only new format matches get blocks
+        # Must pass BOTH checks:
+        # 1. Scheduled for March 2+ (date check)
+        # 2. Created in new format era (excludes Feb 19 batch)
+        if not is_new_format_date(match.match_date):
+            continue
         if not is_new_format_match(match_id):
             continue
 
@@ -142,6 +206,9 @@ def assign_blocks_to_all_matches(store) -> dict[str, int]:
         if not match:
             continue
 
+        # Same filters as above
+        if not is_new_format_date(match.match_date):
+            continue
         if not is_new_format_match(match_id):
             continue
 
